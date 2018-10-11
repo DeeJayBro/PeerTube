@@ -16,13 +16,11 @@ import {
   getVideosList,
   getVideosListPagination,
   getVideosListSort,
+  getVideosWithFilters,
   killallServers,
   rateVideo,
   removeVideo,
   runServer,
-  searchVideo,
-  searchVideoWithPagination,
-  searchVideoWithSort,
   ServerInfo,
   setAccessTokensToServers,
   testImage,
@@ -58,7 +56,8 @@ describe('Test a single server', function () {
     privacy: VideoPrivacy.PUBLIC,
     commentsEnabled: true,
     channel: {
-      name: 'Default root channel',
+      displayName: 'Main root channel',
+      name: 'root_channel',
       description: '',
       isLocal: true
     },
@@ -89,7 +88,8 @@ describe('Test a single server', function () {
     duration: 5,
     commentsEnabled: false,
     channel: {
-      name: 'Default root channel',
+      name: 'root_channel',
+      displayName: 'Main root channel',
       description: '',
       isLocal: true
     },
@@ -196,7 +196,7 @@ describe('Test a single server', function () {
   })
 
   it('Should have the views updated', async function () {
-    this.timeout(10000)
+    this.timeout(20000)
 
     await viewVideo(server.url, videoId)
     await viewVideo(server.url, videoId)
@@ -211,78 +211,15 @@ describe('Test a single server', function () {
 
     await viewVideo(server.url, videoId)
     await viewVideo(server.url, videoId)
+
+    // Wait the repeatable job
+    await wait(8000)
 
     const res = await getVideo(server.url, videoId)
 
     const video = res.body
     expect(video.views).to.equal(3)
   })
-
-  it('Should search the video by name', async function () {
-    const res = await searchVideo(server.url, 'my')
-
-    expect(res.body.total).to.equal(1)
-    expect(res.body.data).to.be.an('array')
-    expect(res.body.data.length).to.equal(1)
-
-    const video = res.body.data[0]
-    await completeVideoCheck(server.url, video, getCheckAttributes)
-  })
-
-  // Not implemented yet
-  // it('Should search the video by tag', async function () {
-  //   const res = await searchVideo(server.url, 'tag1')
-  //
-  //   expect(res.body.total).to.equal(1)
-  //   expect(res.body.data).to.be.an('array')
-  //   expect(res.body.data.length).to.equal(1)
-  //
-  //   const video = res.body.data[0]
-  //   expect(video.name).to.equal('my super name')
-  //   expect(video.category).to.equal(2)
-  //   expect(video.categoryLabel).to.equal('Films')
-  //   expect(video.licence).to.equal(6)
-  //   expect(video.licenceLabel).to.equal('Attribution - Non Commercial - No Derivatives')
-  //   expect(video.language).to.equal('zh')
-  //   expect(video.languageLabel).to.equal('Chinese')
-  //   expect(video.nsfw).to.be.ok
-  //   expect(video.description).to.equal('my super description')
-  //   expect(video.account.name).to.equal('root')
-  //   expect(video.account.host).to.equal('localhost:9001')
-  //   expect(video.isLocal).to.be.true
-  //   expect(video.tags).to.deep.equal([ 'tag1', 'tag2', 'tag3' ])
-  //   expect(dateIsValid(video.createdAt)).to.be.true
-  //   expect(dateIsValid(video.updatedAt)).to.be.true
-  //
-  //   const test = await testVideoImage(server.url, 'video_short.webm', video.thumbnailPath)
-  //   expect(test).to.equal(true)
-  // })
-
-  it('Should not find a search by name', async function () {
-    const res = await searchVideo(server.url, 'hello')
-
-    expect(res.body.total).to.equal(0)
-    expect(res.body.data).to.be.an('array')
-    expect(res.body.data.length).to.equal(0)
-  })
-
-  // Not implemented yet
-  // it('Should not find a search by author', async function () {
-  //   const res = await searchVideo(server.url, 'hello')
-  //
-  //   expect(res.body.total).to.equal(0)
-  //   expect(res.body.data).to.be.an('array')
-  //   expect(res.body.data.length).to.equal(0)
-  // })
-  //
-  // Not implemented yet
-  // it('Should not find a search by tag', async function () {
-  //   const res = await searchVideo(server.url, 'hello')
-  //
-  //   expect(res.body.total).to.equal(0)
-  //   expect(res.body.data).to.be.an('array')
-  //   expect(res.body.data.length).to.equal(0)
-  // })
 
   it('Should remove the video', async function () {
     await removeVideo(server.url, server.accessToken, videoId)
@@ -386,65 +323,6 @@ describe('Test a single server', function () {
     expect(videos[0].name).to.equal(videosListBase[5].name)
   })
 
-  it('Should search the first video', async function () {
-    const res = await searchVideoWithPagination(server.url, 'webm', 0, 1, 'name')
-
-    const videos = res.body.data
-    expect(res.body.total).to.equal(4)
-    expect(videos.length).to.equal(1)
-    expect(videos[0].name).to.equal('video_short1.webm name')
-  })
-
-  it('Should search the last two videos', async function () {
-    const res = await searchVideoWithPagination(server.url, 'webm', 2, 2, 'name')
-
-    const videos = res.body.data
-    expect(res.body.total).to.equal(4)
-    expect(videos.length).to.equal(2)
-    expect(videos[0].name).to.equal('video_short3.webm name')
-    expect(videos[1].name).to.equal('video_short.webm name')
-  })
-
-  it('Should search all the webm videos', async function () {
-    const res = await searchVideoWithPagination(server.url, 'webm', 0, 15)
-
-    const videos = res.body.data
-    expect(res.body.total).to.equal(4)
-    expect(videos.length).to.equal(4)
-  })
-
-  // Not implemented yet
-  // it('Should search all the root author videos', async function () {
-  //   const res = await searchVideoWithPagination(server.url, 'root', 0, 15)
-  //
-  //   const videos = res.body.data
-  //   expect(res.body.total).to.equal(6)
-  //   expect(videos.length).to.equal(6)
-  // })
-
-  // Not implemented yet
-  // it('Should search all the 9001 port videos', async function () {
-  // const res = await   videosUtils.searchVideoWithPagination(server.url, '9001', 'host', 0, 15)
-
-  //     const videos = res.body.data
-  //     expect(res.body.total).to.equal(6)
-  //     expect(videos.length).to.equal(6)
-
-  //     done()
-  //   })
-  // })
-
-  // it('Should search all the localhost videos', async function () {
-  // const res = await   videosUtils.searchVideoWithPagination(server.url, 'localhost', 'host', 0, 15)
-
-  //     const videos = res.body.data
-  //     expect(res.body.total).to.equal(6)
-  //     expect(videos.length).to.equal(6)
-
-  //     done()
-  //   })
-  // })
-
   it('Should list and sort by name in descending order', async function () {
     const res = await getVideosListSort(server.url, '-name')
 
@@ -457,21 +335,16 @@ describe('Test a single server', function () {
     expect(videos[3].name).to.equal('video_short3.webm name')
     expect(videos[4].name).to.equal('video_short2.webm name')
     expect(videos[5].name).to.equal('video_short1.webm name')
+
+    videoId = videos[3].uuid
   })
 
-  it('Should search and sort by name in ascending order', async function () {
-    const res = await searchVideoWithSort(server.url, 'webm', 'name')
+  it('Should list and sort by trending in descending order', async function () {
+    const res = await getVideosListPagination(server.url, 0, 2, '-trending')
 
     const videos = res.body.data
-    expect(res.body.total).to.equal(4)
-    expect(videos.length).to.equal(4)
-
-    expect(videos[0].name).to.equal('video_short1.webm name')
-    expect(videos[1].name).to.equal('video_short2.webm name')
-    expect(videos[2].name).to.equal('video_short3.webm name')
-    expect(videos[3].name).to.equal('video_short.webm name')
-
-    videoId = videos[2].id
+    expect(res.body.total).to.equal(6)
+    expect(videos.length).to.equal(2)
   })
 
   it('Should update a video', async function () {
@@ -486,6 +359,15 @@ describe('Test a single server', function () {
       tags: [ 'tagup1', 'tagup2' ]
     }
     await updateVideo(server.url, server.accessToken, videoId, attributes)
+  })
+
+  it('Should filter by tags and category', async function () {
+    const res1 = await getVideosWithFilters(server.url, { tagsAllOf: [ 'tagup1', 'tagup2' ], categoryOneOf: 4 })
+    expect(res1.body.total).to.equal(1)
+    expect(res1.body.data[0].name).to.equal('my super video updated')
+
+    const res2 = await getVideosWithFilters(server.url, { tagsAllOf: [ 'tagup1', 'tagup2' ], categoryOneOf: 3 })
+    expect(res2.body.total).to.equal(0)
   })
 
   it('Should have the video updated', async function () {

@@ -4,8 +4,7 @@ import * as chai from 'chai'
 import { isAbsolute, join } from 'path'
 import * as request from 'supertest'
 import * as WebTorrent from 'webtorrent'
-import { readFileBufferPromise } from '../../../helpers/core-utils'
-import { ServerInfo } from '..'
+import { readFile } from 'fs-extra'
 
 const expect = chai.expect
 let webtorrent = new WebTorrent()
@@ -38,31 +37,26 @@ function root () {
 }
 
 async function testImage (url: string, imageName: string, imagePath: string, extension = '.jpg') {
-  // Don't test images if the node env is not set
-  // Because we need a special ffmpeg version for this test
-  if (process.env[ 'NODE_TEST_IMAGE' ]) {
-    const res = await request(url)
-      .get(imagePath)
-      .expect(200)
+  const res = await request(url)
+    .get(imagePath)
+    .expect(200)
 
-    const body = res.body
+  const body = res.body
 
-    const data = await readFileBufferPromise(join(__dirname, '..', '..', 'fixtures', imageName + extension))
-    const minLength = body.length - ((20 * body.length) / 100)
-    const maxLength = body.length + ((20 * body.length) / 100)
+  const data = await readFile(join(__dirname, '..', '..', 'fixtures', imageName + extension))
+  const minLength = body.length - ((20 * body.length) / 100)
+  const maxLength = body.length + ((20 * body.length) / 100)
 
-    expect(data.length).to.be.above(minLength)
-    expect(data.length).to.be.below(maxLength)
-  } else {
-    console.log('Do not test images. Enable it by setting NODE_TEST_IMAGE env variable.')
-    return true
-  }
+  expect(data.length).to.be.above(minLength)
+  expect(data.length).to.be.below(maxLength)
 }
 
-function buildAbsoluteFixturePath (path: string) {
+function buildAbsoluteFixturePath (path: string, customTravisPath = false) {
   if (isAbsolute(path)) {
     return path
   }
+
+  if (customTravisPath && process.env.TRAVIS) return join(process.env.HOME, 'fixtures', path)
 
   return join(__dirname, '..', '..', 'fixtures', path)
 }

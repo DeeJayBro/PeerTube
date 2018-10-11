@@ -18,7 +18,7 @@ import { ScreenService } from '@app/shared/misc/screen.service'
 export class VideoTrendingComponent extends AbstractVideoList implements OnInit, OnDestroy {
   titlePage: string
   currentRoute = '/videos/trending'
-  defaultSort: VideoSortField = '-views'
+  defaultSort: VideoSortField = '-trending'
 
   constructor (
     protected router: Router,
@@ -47,10 +47,10 @@ export class VideoTrendingComponent extends AbstractVideoList implements OnInit,
 
   getVideosObservable (page: number) {
     const newPagination = immutableAssign(this.pagination, { currentPage: page })
-    return this.videoService.getVideos(newPagination, this.sort, undefined, this.category)
+    return this.videoService.getVideos(newPagination, this.sort, undefined, this.categoryOneOf)
   }
 
   generateSyndicationList () {
-    this.syndicationItems = this.videoService.getVideoFeedUrls(this.sort, undefined, this.category)
+    this.syndicationItems = this.videoService.getVideoFeedUrls(this.sort, undefined, this.categoryOneOf)
   }
 }

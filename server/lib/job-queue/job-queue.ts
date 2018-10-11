@@ -1,13 +1,16 @@
 import * as Bull from 'bull'
 import { JobState, JobType } from '../../../shared/models'
 import { logger } from '../../helpers/logger'
-import { CONFIG, JOB_ATTEMPTS, JOB_COMPLETED_LIFETIME, JOB_CONCURRENCY, JOB_REQUEST_TTL } from '../../initializers'
+import { Redis } from '../redis'
+import { CONFIG, JOB_ATTEMPTS, JOB_COMPLETED_LIFETIME, JOB_CONCURRENCY, JOB_TTL, REPEAT_JOBS } from '../../initializers'
 import { ActivitypubHttpBroadcastPayload, processActivityPubHttpBroadcast } from './handlers/activitypub-http-broadcast'
 import { ActivitypubHttpFetcherPayload, processActivityPubHttpFetcher } from './handlers/activitypub-http-fetcher'
 import { ActivitypubHttpUnicastPayload, processActivityPubHttpUnicast } from './handlers/activitypub-http-unicast'
 import { EmailPayload, processEmail } from './handlers/email'
 import { processVideoFile, processVideoFileImport, VideoFileImportPayload, VideoFilePayload } from './handlers/video-file'
 import { ActivitypubFollowPayload, processActivityPubFollow } from './handlers/activitypub-follow'
+import { processVideoImport, VideoImportPayload } from './handlers/video-import'
+import { processVideosViewsViews } from './handlers/video-views'
 
 type CreateJobArgument =
   { type: 'activitypub-http-broadcast', payload: ActivitypubHttpBroadcastPayload } |
@@ -16,7 +19,9 @@ type CreateJobArgument =
   { type: 'activitypub-follow', payload: ActivitypubFollowPayload } |
   { type: 'video-file-import', payload: VideoFileImportPayload } |
   { type: 'video-file', payload: VideoFilePayload } |
-  { type: 'email', payload: EmailPayload }
+  { type: 'email', payload: EmailPayload } |
+  { type: 'video-import', payload: VideoImportPayload } |
+  { type: 'videos-views', payload: {} }
 
 const handlers: { [ id in JobType ]: (job: Bull.Job) => Promise<any>} = {
   'activitypub-http-broadcast': processActivityPubHttpBroadcast,
@@ -25,14 +30,9 @@ const handlers: { [ id in JobType ]: (job: Bull.Job) => Promise<any>} = {
   'activitypub-follow': processActivityPubFollow,
   'video-file-import': processVideoFileImport,
   'video-file': processVideoFile,
-  'email': processEmail
-}
-
-const jobsWithRequestTimeout: { [ id in JobType ]?: boolean } = {
-  'activitypub-http-broadcast': true,
-  'activitypub-http-unicast': true,
-  'activitypub-http-fetcher': true,
-  'activitypub-follow': true
+  'email': processEmail,
+  'video-import': processVideoImport,
+  'videos-views': processVideosViewsViews
 }
 
 const jobTypes: JobType[] = [
@@ -42,7 +42,9 @@ const jobTypes: JobType[] = [
   'activitypub-http-unicast',
   'email',
   'video-file',
-  'video-file-import'
+  'video-file-import',
+  'video-import',
+  'videos-views'
 ]
 
 class JobQueue {
@@ -63,11 +65,9 @@ class JobQueue {
     this.jobRedisPrefix = 'bull-' + CONFIG.WEBSERVER.HOST
     const queueOptions = {
       prefix: this.jobRedisPrefix,
-      redis: {
-        host: CONFIG.REDIS.HOSTNAME,
-        port: CONFIG.REDIS.PORT,
-        auth: CONFIG.REDIS.AUTH,
-        db: CONFIG.REDIS.DB
+      redis: Redis.getRedisClient(),
+      settings: {
+        maxStalledCount: 10 // transcoding could be long, so jobs can often be interrupted by restarts
       }
     }
 
@@ -76,7 +76,11 @@ class JobQueue {
       const handler = handlers[handlerName]
 
       queue.process(JOB_CONCURRENCY[handlerName], handler)
-        .catch(err => logger.error('Cannot execute job queue %s.', handlerName, { err }))
+           .catch(err => logger.error('Error in job queue processor %s.', handlerName, { err }))
+
+      queue.on('failed', (job, err) => {
+        logger.error('Cannot execute job %d in queue %s.', job.id, handlerName, { payload: job.data, err })
+      })
 
       queue.on('error', err => {
         logger.error('Error in job queue %s.', handlerName, { err })
@@ -85,22 +89,28 @@ class JobQueue {
 
       this.queues[handlerName] = queue
     }
+
+    this.addRepeatableJobs()
+  }
+
+  terminate () {
+    for (const queueName of Object.keys(this.queues)) {
+      const queue = this.queues[queueName]
+      queue.close()
+    }
   }
 
   createJob (obj: CreateJobArgument) {
     const queue = this.queues[obj.type]
     if (queue === undefined) {
       logger.error('Unknown queue %s: cannot create job.', obj.type)
-      return
+      throw Error('Unknown queue, cannot create job')
     }
 
     const jobArgs: Bull.JobOptions = {
       backoff: { delay: 60 * 1000, type: 'exponential' },
-      attempts: JOB_ATTEMPTS[obj.type]
-    }
-
-    if (jobsWithRequestTimeout[obj.type] === true) {
-      jobArgs.timeout = JOB_REQUEST_TTL
+      attempts: JOB_ATTEMPTS[obj.type],
+      timeout: JOB_TTL[obj.type]
     }
 
     return queue.add(obj.payload, jobArgs)
@@ -157,6 +167,12 @@ class JobQueue {
       const queue = this.queues[key]
       queue.clean(JOB_COMPLETED_LIFETIME, 'completed')
     }
+  }
+
+  private addRepeatableJobs () {
+    this.queues['videos-views'].add({}, {
+      repeat: REPEAT_JOBS['videos-views']
+    })
   }
 
   static get Instance () {

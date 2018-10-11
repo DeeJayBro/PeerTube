@@ -2,9 +2,8 @@
 
 .video-feed {
   a {
-    @include disable-default-a-behaviour;
-
     color: black;
+    display: block;
   }
 
   .icon {
@@ -13,7 +12,8 @@
     &.icon-syndication {
       position: relative;
       top: -2px;
-      background-image: url('../../../assets/images/global/syndication.svg');
+      background-color: var(--mainForegroundColor);
+      mask-image: url('../../../assets/images/global/syndication.svg');
     }
   }
 }

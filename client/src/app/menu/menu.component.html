@@ -8,27 +8,29 @@
 
         <div class="logged-in-info">
           <a routerLink="/my-account/settings" class="logged-in-username">{{ user.account?.displayName }}</a>
-          <div class="logged-in-email">{{ user.email }}</div>
+          <div class="logged-in-email">{{ user.username }}</div>
         </div>
 
-        <div class="logged-in-more" dropdown placement="right" container="body">
-          <span class="glyphicon glyphicon-option-vertical" dropdownToggle></span>
+        <div class="logged-in-more" ngbDropdown placement="bottom-right">
+          <span class="glyphicon glyphicon-option-vertical" ngbDropdownToggle role="button"></span>
 
-          <ul *dropdownMenu class="dropdown-menu">
-            <li>
-              <a i18n [routerLink]="[ '/accounts', user.account?.nameWithHost ]" class="dropdown-item" title="My public profile">
-               My public profile
-              </a>
+          <div ngbDropdownMenu>
+            <a *ngIf="user.account" i18n [routerLink]="[ '/accounts', user.account.nameWithHost ]" class="dropdown-item">
+             My public profile
+            </a>
 
-              <a i18n routerLink="/my-account" class="dropdown-item" title="My account">
-                My account
-              </a>
+            <a i18n routerLink="/my-account" class="dropdown-item">
+              My account
+            </a>
 
-              <a i18n (click)="logout($event)" class="dropdown-item" title="Log out" href="#">
-                Log out
-              </a>
-            </li>
-          </ul>
+            <a i18n routerLink="/my-account/videos" class="dropdown-item">
+              My videos
+            </a>
+
+            <a i18n (click)="logout($event)" class="dropdown-item" href="#">
+              Log out
+            </a>
+          </div>
         </div>
       </div>
 
@@ -39,6 +41,16 @@
 
       <div class="panel-block">
         <div i18n class="block-title">Videos</div>
+
+        <a *ngIf="isLoggedIn" routerLink="/videos/subscriptions" routerLinkActive="active">
+          <span class="icon icon-videos-subscriptions"></span>
+          <ng-container i18n>Subscriptions</ng-container>
+        </a>
+
+        <a routerLink="/videos/overview" routerLinkActive="active">
+          <span class="icon icon-videos-overview"></span>
+          <ng-container i18n>Overview</ng-container>
+        </a>
 
         <a routerLink="/videos/trending" routerLinkActive="active">
           <span class="icon icon-videos-trending"></span>
@@ -71,9 +83,15 @@
       </div>
     </div>
 
-    <div class="footer">
+    <div class="footer d-flex justify-content-between">
       <span class="language">
-        <span (click)="openLanguageChooser()" i18n-title title="Change the language" class="icon icon-language"></span>
+        <span tabindex="0" (keyup.enter)="openLanguageChooser()" (click)="openLanguageChooser()" i18n-title title="Change the language" class="icon icon-language"></span>
+      </span>
+      <span class="shortcuts">
+        <span tabindex="0" (keyup.enter)="openHotkeysCheatSheet()" (click)="openHotkeysCheatSheet()" i18n-title title="Show keyboard shortcuts" class="icon icon-shortcuts"></span>
+      </span>
+      <span class="color-palette">
+        <span tabindex="0" (keyup.enter)="toggleDarkTheme()" (click)="toggleDarkTheme()" i18n-title title="Toggle dark interface" class="icon icon-moonsun"></span>
       </span>
     </div>
   </menu>

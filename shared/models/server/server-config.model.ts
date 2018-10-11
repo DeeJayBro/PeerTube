@@ -2,6 +2,7 @@ import { NSFWPolicyType } from '../videos/nsfw-policy.type'
 
 export interface ServerConfig {
   serverVersion: string
+  serverCommit?: string
 
   instance: {
     name: string
@@ -16,11 +17,23 @@ export interface ServerConfig {
 
   signup: {
     allowed: boolean,
-    allowedForCurrentIP: boolean
+    allowedForCurrentIP: boolean,
+    requiresEmailVerification: boolean
   }
 
   transcoding: {
     enabledResolutions: number[]
+  }
+
+  import: {
+    videos: {
+      http: {
+        enabled: boolean
+      }
+      torrent: {
+        enabled: boolean
+      }
+    }
   }
 
   avatar: {
@@ -44,7 +57,17 @@ export interface ServerConfig {
     }
   }
 
+  videoCaption: {
+    file: {
+      size: {
+        max: number
+      },
+      extensions: string[]
+    }
+  }
+
   user: {
     videoQuota: number
+    videoQuotaDaily: number
   }
 }

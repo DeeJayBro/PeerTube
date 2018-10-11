@@ -1,10 +1,10 @@
 import {
   ActivityIconObject,
-  ActivityIdentifierObject, ActivityPubAttributedTo,
+  ActivityIdentifierObject,
+  ActivityPubAttributedTo,
   ActivityTagObject,
   ActivityUrlObject
 } from './common-objects'
-import { ActivityPubOrderedCollection } from '../activitypub-ordered-collection'
 import { VideoState } from '../../videos'
 
 export interface VideoTorrentObject {
@@ -17,6 +17,7 @@ export interface VideoTorrentObject {
   category: ActivityIdentifierObject
   licence: ActivityIdentifierObject
   language: ActivityIdentifierObject
+  subtitleLanguage: ActivityIdentifierObject[]
   views: number
   sensitive: boolean
   commentsEnabled: boolean

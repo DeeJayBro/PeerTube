@@ -3,11 +3,18 @@ export const LOCALE_FILES = [ 'player', 'server' ]
 export const I18N_LOCALES = {
   'en-US': 'English',
   'fr-FR': 'Français',
-  'eu-ES': 'euskara',
-  'ca-ES': 'català',
-  'cs-CZ': 'čeština',
-  'eo': 'Esperanto'
-  // 'pl-PL': 'polski'
+  'eu-ES': 'Euskara',
+  'ca-ES': 'Català',
+  'cs-CZ': 'Čeština',
+  'eo': 'Esperanto',
+  'de-DE': 'Deutsch',
+  'es-ES': 'Español',
+  'oc': 'Occitan',
+  'zh-Hant-TW': '繁體中文（台灣）',
+  'pt-BR': 'Português (Brasil)',
+  'sv-SE': 'svenska',
+  // 'pl-PL': 'Polski'
+  'zh-Hans-CN': '简体中文（中国）'
 }
 
 const I18N_LOCALE_ALIAS = {
@@ -15,7 +22,11 @@ const I18N_LOCALE_ALIAS = {
   'fr': 'fr-FR',
   'eu': 'eu-ES',
   'ca': 'ca-ES',
-  'cs': 'cs-CZ'
+  'cs': 'cs-CZ',
+  'de': 'de-DE',
+  'es': 'es-ES',
+  'pt': 'pt-BR',
+  'sv': 'sv-SE'
   // 'pl': 'pl-PL'
 }
 
@@ -28,6 +39,10 @@ export function getDefaultLocale () {
 
 export function isDefaultLocale (locale: string) {
   return getCompleteLocale(locale) === getCompleteLocale(getDefaultLocale())
+}
+
+export function peertubeTranslate (str: string, translations?: { [ id: string ]: string }) {
+  return translations && translations[str] ? translations[str] : str
 }
 
 const possiblePaths = POSSIBLE_LOCALES.map(l => '/' + l)
@@ -56,5 +71,5 @@ export function getShortLocale (locale: string) {
 export function buildFileLocale (locale: string) {
   const completeLocale = getCompleteLocale(locale)
 
-  return completeLocale.replace('-', '_')
+  return completeLocale.replace(/-/g, '_')
 }

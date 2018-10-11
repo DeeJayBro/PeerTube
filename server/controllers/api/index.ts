@@ -9,6 +9,8 @@ import { videosRouter } from './videos'
 import { badRequest } from '../../helpers/express-utils'
 import { videoChannelRouter } from './video-channel'
 import * as cors from 'cors'
+import { searchRouter } from './search'
+import { overviewsRouter } from './overviews'
 
 const apiRouter = express.Router()
 
@@ -26,6 +28,8 @@ apiRouter.use('/accounts', accountsRouter)
 apiRouter.use('/video-channels', videoChannelRouter)
 apiRouter.use('/videos', videosRouter)
 apiRouter.use('/jobs', jobsRouter)
+apiRouter.use('/search', searchRouter)
+apiRouter.use('/overviews', overviewsRouter)
 apiRouter.use('/ping', pong)
 apiRouter.use('/*', badRequest)
 

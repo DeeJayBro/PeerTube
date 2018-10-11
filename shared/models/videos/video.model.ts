@@ -1,14 +1,10 @@
 import { VideoResolution, VideoState } from '../../index'
 import { Account } from '../actors'
 import { Avatar } from '../avatars/avatar.model'
-import { VideoChannel } from './video-channel.model'
+import { VideoChannel } from './channel/video-channel.model'
 import { VideoPrivacy } from './video-privacy.enum'
 import { VideoScheduleUpdate } from './video-schedule-update.model'
-
-export interface VideoConstant <T> {
-  id: T
-  label: string
-}
+import { VideoConstant } from './video-constant.model'
 
 export interface VideoFile {
   magnetUri: string
@@ -19,6 +15,26 @@ export interface VideoFile {
   fileUrl: string
   fileDownloadUrl: string
   fps: number
+}
+
+export interface VideoChannelAttribute {
+  id: number
+  uuid: string
+  name: string
+  displayName: string
+  url: string
+  host: string
+  avatar: Avatar
+}
+
+export interface AccountAttribute {
+  id: number
+  uuid: string
+  name: string
+  displayName: string
+  url: string
+  host: string
+  avatar: Avatar
 }
 
 export interface Video {
@@ -47,24 +63,14 @@ export interface Video {
   state?: VideoConstant<VideoState>
   scheduledUpdate?: VideoScheduleUpdate
 
-  account: {
-    id: number
-    uuid: string
-    name: string
-    displayName: string
-    url: string
-    host: string
-    avatar: Avatar
-  }
+  blacklisted?: boolean
+  blacklistedReason?: string
 
-  channel: {
-    id: number
-    uuid: string
-    name: string
-    displayName: string
-    url: string
-    host: string
-    avatar: Avatar
+  account: AccountAttribute
+  channel: VideoChannelAttribute
+
+  userHistory?: {
+    currentTime: number
   }
 }
 

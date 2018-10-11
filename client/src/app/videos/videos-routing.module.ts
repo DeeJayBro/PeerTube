@@ -1,11 +1,12 @@
 import { NgModule } from '@angular/core'
-import { RouterModule, Routes, UrlSegment } from '@angular/router'
+import { RouterModule, Routes } from '@angular/router'
 import { VideoLocalComponent } from '@app/videos/video-list/video-local.component'
 import { MetaGuard } from '@ngx-meta/core'
-import { VideoSearchComponent } from './video-list'
 import { VideoRecentlyAddedComponent } from './video-list/video-recently-added.component'
 import { VideoTrendingComponent } from './video-list/video-trending.component'
 import { VideosComponent } from './videos.component'
+import { VideoUserSubscriptionsComponent } from '@app/videos/video-list/video-user-subscriptions.component'
+import { VideoOverviewComponent } from '@app/videos/video-list/video-overview.component'
 
 const videosRoutes: Routes = [
   {
@@ -14,9 +15,13 @@ const videosRoutes: Routes = [
     canActivateChild: [ MetaGuard ],
     children: [
       {
-        path: 'list',
-        pathMatch: 'full',
-        redirectTo: 'recently-added'
+        path: 'overview',
+        component: VideoOverviewComponent,
+        data: {
+          meta: {
+            title: 'Videos overview'
+          }
+        }
       },
       {
         path: 'trending',
@@ -37,20 +42,20 @@ const videosRoutes: Routes = [
         }
       },
       {
+        path: 'subscriptions',
+        component: VideoUserSubscriptionsComponent,
+        data: {
+          meta: {
+            title: 'Subscriptions'
+          }
+        }
+      },
+      {
         path: 'local',
         component: VideoLocalComponent,
         data: {
           meta: {
             title: 'Local videos'
-          }
-        }
-      },
-      {
-        path: 'search',
-        component: VideoSearchComponent,
-        data: {
-          meta: {
-            title: 'Search videos'
           }
         }
       },

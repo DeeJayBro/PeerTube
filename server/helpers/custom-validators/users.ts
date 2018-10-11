@@ -2,7 +2,7 @@ import 'express-validator'
 import * as validator from 'validator'
 import { UserRole } from '../../../shared'
 import { CONSTRAINTS_FIELDS, NSFW_POLICY_TYPES } from '../../initializers'
-import { exists, isFileValid } from './misc'
+import { exists, isFileValid, isBooleanValid } from './misc'
 import { values } from 'lodash'
 
 const USERS_CONSTRAINTS_FIELDS = CONSTRAINTS_FIELDS.USERS
@@ -13,6 +13,10 @@ function isUserPasswordValid (value: string) {
 
 function isUserVideoQuotaValid (value: string) {
   return exists(value) && validator.isInt(value + '', USERS_CONSTRAINTS_FIELDS.VIDEO_QUOTA)
+}
+
+function isUserVideoQuotaDailyValid (value: string) {
+  return exists(value) && validator.isInt(value + '', USERS_CONSTRAINTS_FIELDS.VIDEO_QUOTA_DAILY)
 }
 
 function isUserUsernameValid (value: string) {
@@ -29,8 +33,8 @@ function isUserDescriptionValid (value: string) {
   return value === null || (exists(value) && validator.isLength(value, CONSTRAINTS_FIELDS.USERS.DESCRIPTION))
 }
 
-function isBoolean (value: any) {
-  return typeof value === 'boolean' || (typeof value === 'string' && validator.isBoolean(value))
+function isUserEmailVerifiedValid (value: any) {
+  return isBooleanValid(value)
 }
 
 const nsfwPolicies = values(NSFW_POLICY_TYPES)
@@ -39,7 +43,15 @@ function isUserNSFWPolicyValid (value: any) {
 }
 
 function isUserAutoPlayVideoValid (value: any) {
-  return isBoolean(value)
+  return isBooleanValid(value)
+}
+
+function isUserBlockedValid (value: any) {
+  return isBooleanValid(value)
+}
+
+function isUserBlockedReasonValid (value: any) {
+  return value === null || (exists(value) && validator.isLength(value, CONSTRAINTS_FIELDS.USERS.BLOCKED_REASON))
 }
 
 function isUserRoleValid (value: any) {
@@ -57,10 +69,14 @@ function isAvatarFile (files: { [ fieldname: string ]: Express.Multer.File[] } |
 // ---------------------------------------------------------------------------
 
 export {
+  isUserBlockedValid,
   isUserPasswordValid,
+  isUserBlockedReasonValid,
   isUserRoleValid,
   isUserVideoQuotaValid,
+  isUserVideoQuotaDailyValid,
   isUserUsernameValid,
+  isUserEmailVerifiedValid,
   isUserNSFWPolicyValid,
   isUserAutoPlayVideoValid,
   isUserDisplayNameValid,

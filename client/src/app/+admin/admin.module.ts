@@ -1,7 +1,6 @@
 import { NgModule } from '@angular/core'
 import { ConfigComponent, EditCustomConfigComponent } from '@app/+admin/config'
 import { ConfigService } from '@app/+admin/config/shared/config.service'
-import { TabsModule } from 'ngx-bootstrap/tabs'
 import { TableModule } from 'primeng/table'
 import { SharedModule } from '../shared'
 import { AdminRoutingModule } from './admin-routing.module'
@@ -11,14 +10,15 @@ import { FollowingListComponent } from './follows/following-list/following-list.
 import { JobsComponent } from './jobs/job.component'
 import { JobsListComponent } from './jobs/jobs-list/jobs-list.component'
 import { JobService } from './jobs/shared/job.service'
-import { UserCreateComponent, UserListComponent, UsersComponent, UserService, UserUpdateComponent } from './users'
-import { VideoAbuseListComponent, VideoAbusesComponent } from './video-abuses'
-import { VideoBlacklistComponent, VideoBlacklistListComponent } from './video-blacklist'
+import { UserCreateComponent, UserListComponent, UsersComponent, UserUpdateComponent } from './users'
+import { ModerationCommentModalComponent, VideoAbuseListComponent, VideoBlacklistListComponent } from './moderation'
+import { ModerationComponent } from '@app/+admin/moderation/moderation.component'
+import { RedundancyCheckboxComponent } from '@app/+admin/follows/shared/redundancy-checkbox.component'
+import { RedundancyService } from '@app/+admin/follows/shared/redundancy.service'
 
 @NgModule({
   imports: [
     AdminRoutingModule,
-    TabsModule.forRoot(),
     TableModule,
     SharedModule
   ],
@@ -30,17 +30,17 @@ import { VideoBlacklistComponent, VideoBlacklistListComponent } from './video-bl
     FollowingAddComponent,
     FollowersListComponent,
     FollowingListComponent,
+    RedundancyCheckboxComponent,
 
     UsersComponent,
     UserCreateComponent,
     UserUpdateComponent,
     UserListComponent,
 
-    VideoBlacklistComponent,
+    ModerationComponent,
     VideoBlacklistListComponent,
-
-    VideoAbusesComponent,
     VideoAbuseListComponent,
+    ModerationCommentModalComponent,
 
     JobsComponent,
     JobsListComponent,
@@ -55,7 +55,7 @@ import { VideoBlacklistComponent, VideoBlacklistListComponent } from './video-bl
 
   providers: [
     FollowService,
-    UserService,
+    RedundancyService,
     JobService,
     ConfigService
   ]

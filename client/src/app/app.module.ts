@@ -5,6 +5,7 @@ import { ResetPasswordModule } from '@app/reset-password'
 
 import { MetaLoader, MetaModule, MetaStaticLoader, PageTitlePositioning } from '@ngx-meta/core'
 import { ClipboardModule } from 'ngx-clipboard'
+import 'focus-visible'
 
 import { AppRoutingModule } from './app-routing.module'
 import { AppComponent } from './app.component'
@@ -18,6 +19,7 @@ import { VideosModule } from './videos'
 import { buildFileLocale, getCompleteLocale, isDefaultLocale } from '../../../shared/models/i18n'
 import { getDevLocale, isOnDevLocale } from '@app/shared/i18n/i18n-utils'
 import { LanguageChooserComponent } from '@app/menu/language-chooser.component'
+import { SearchModule } from '@app/search'
 
 export function metaFactory (serverService: ServerService): MetaLoader {
   return new MetaStaticLoader({
@@ -52,6 +54,7 @@ export function metaFactory (serverService: ServerService): MetaLoader {
     LoginModule,
     ResetPasswordModule,
     SignupModule,
+    SearchModule,
     SharedModule,
     VideosModule,
 
@@ -69,7 +72,7 @@ export function metaFactory (serverService: ServerService): MetaLoader {
       useFactory: (locale) => {
         // On dev mode, test localization
         if (isOnDevLocale()) {
-          locale = getDevLocale()
+          locale = buildFileLocale(getDevLocale())
           return require(`raw-loader!../locale/target/angular_${locale}.xml`)
         }
 

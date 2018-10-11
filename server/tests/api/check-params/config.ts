@@ -35,17 +35,22 @@ describe('Test config API validators', function () {
     cache: {
       previews: {
         size: 2
+      },
+      captions: {
+        size: 3
       }
     },
     signup: {
       enabled: false,
-      limit: 5
+      limit: 5,
+      requiresEmailVerification: false
     },
     admin: {
       email: 'superadmin1@example.com'
     },
     user: {
-      videoQuota: 5242881
+      videoQuota: 5242881,
+      videoQuotaDaily: 318742
     },
     transcoding: {
       enabled: true,
@@ -56,6 +61,16 @@ describe('Test config API validators', function () {
         '480p': true,
         '720p': false,
         '1080p': false
+      }
+    },
+    import: {
+      videos: {
+        http: {
+          enabled: false
+        },
+        torrent: {
+          enabled: false
+        }
       }
     }
   }

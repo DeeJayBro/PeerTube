@@ -66,9 +66,17 @@ function updateInstanceWithAnother <T extends Model<T>> (instanceToUpdate: Model
   }
 }
 
+function resetSequelizeInstance (instance: Model<any>, savedFields: object) {
+  Object.keys(savedFields).forEach(key => {
+    const value = savedFields[key]
+    instance.set(key, value)
+  })
+}
+
 // ---------------------------------------------------------------------------
 
 export {
+  resetSequelizeInstance,
   retryTransactionWrapper,
   transactionRetryer,
   updateInstanceWithAnother

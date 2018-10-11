@@ -4,7 +4,7 @@
 @import '~videojs-dock/dist/videojs-dock.css';
 
 $assets-path: '../../assets/';
-@import '../../sass/player/player';
+@import '../../sass/player/index';
 
 [hidden] {
   display: none !important;
@@ -63,7 +63,6 @@ html, body {
   align-content: center;
   justify-content: center;
   text-align: center;
-  background-color: #141313;
   width: 100%;
   height: 100%;
   color: white;

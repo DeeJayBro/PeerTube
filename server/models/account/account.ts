@@ -16,11 +16,9 @@ import {
 } from 'sequelize-typescript'
 import { Account } from '../../../shared/models/actors'
 import { isAccountDescriptionValid } from '../../helpers/custom-validators/accounts'
-import { logger } from '../../helpers/logger'
 import { sendDeleteActor } from '../../lib/activitypub/send'
 import { ActorModel } from '../activitypub/actor'
 import { ApplicationModel } from '../application/application'
-import { AvatarModel } from '../avatar/avatar'
 import { ServerModel } from '../server/server'
 import { getSort, throwIfNotValid } from '../utils'
 import { VideoChannelModel } from '../video/video-channel'
@@ -30,23 +28,25 @@ import { UserModel } from './user'
 @DefaultScope({
   include: [
     {
-      model: () => ActorModel,
-      required: true,
-      include: [
-        {
-          model: () => ServerModel,
-          required: false
-        },
-        {
-          model: () => AvatarModel,
-          required: false
-        }
-      ]
+      model: () => ActorModel, // Default scope includes avatar and server
+      required: true
     }
   ]
 })
 @Table({
-  tableName: 'account'
+  tableName: 'account',
+  indexes: [
+    {
+      fields: [ 'actorId' ],
+      unique: true
+    },
+    {
+      fields: [ 'applicationId' ]
+    },
+    {
+      fields: [ 'userId' ]
+    }
+  ]
 })
 export class AccountModel extends Model<AccountModel> {
 
@@ -127,15 +127,14 @@ export class AccountModel extends Model<AccountModel> {
     }
 
     if (instance.isOwned()) {
-      logger.debug('Sending delete of actor of account %s.', instance.Actor.url)
       return sendDeleteActor(instance.Actor, options.transaction)
     }
 
     return undefined
   }
 
-  static load (id: number) {
-    return AccountModel.findById(id)
+  static load (id: number, transaction?: Sequelize.Transaction) {
+    return AccountModel.findById(id, { transaction })
   }
 
   static loadByUUID (uuid: string) {
@@ -184,7 +183,7 @@ export class AccountModel extends Model<AccountModel> {
     return AccountModel.findOne(query)
   }
 
-  static loadLocalByNameAndHost (name: string, host: string) {
+  static loadByNameAndHost (name: string, host: string) {
     const query = {
       include: [
         {
@@ -249,7 +248,8 @@ export class AccountModel extends Model<AccountModel> {
       displayName: this.getDisplayName(),
       description: this.description,
       createdAt: this.createdAt,
-      updatedAt: this.updatedAt
+      updatedAt: this.updatedAt,
+      userId: this.userId ? this.userId : undefined
     }
 
     return Object.assign(actor, account)

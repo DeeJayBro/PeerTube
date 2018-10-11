@@ -11,6 +11,7 @@ import { VideoSortField } from './sort-field.type'
 import { Video } from './video.model'
 import { I18n } from '@ngx-translate/i18n-polyfill'
 import { ScreenService } from '@app/shared/misc/screen.service'
+import { OwnerDisplayType } from '@app/shared/video/video-miniature.component'
 
 export abstract class AbstractVideoList implements OnInit, OnDestroy {
   private static LINES_PER_PAGE = 4
@@ -24,7 +25,7 @@ export abstract class AbstractVideoList implements OnInit, OnDestroy {
     totalItems: null
   }
   sort: VideoSortField = '-publishedAt'
-  category?: number
+  categoryOneOf?: number
   defaultSort: VideoSortField = '-publishedAt'
   syndicationItems = []
 
@@ -34,9 +35,12 @@ export abstract class AbstractVideoList implements OnInit, OnDestroy {
   videoWidth: number
   videoHeight: number
   videoPages: Video[][] = []
+  ownerDisplayType: OwnerDisplayType = 'account'
+  firstLoadedPage: number
+  displayModerationBlock = false
 
   protected baseVideoWidth = 215
-  protected baseVideoHeight = 230
+  protected baseVideoHeight = 205
 
   protected abstract notificationsService: NotificationsService
   protected abstract authService: AuthService
@@ -78,6 +82,15 @@ export abstract class AbstractVideoList implements OnInit, OnDestroy {
     if (this.resizeSubscription) this.resizeSubscription.unsubscribe()
   }
 
+  pageByVideoId (index: number, page: Video[]) {
+    // Video are unique in all pages
+    return page.length !== 0 ? page[0].id : 0
+  }
+
+  videoById (index: number, video: Video) {
+    return video.id
+  }
+
   onNearOfTop () {
     this.previousPage()
   }
@@ -98,7 +111,11 @@ export abstract class AbstractVideoList implements OnInit, OnDestroy {
     this.loadMoreVideos(this.pagination.currentPage)
   }
 
-  loadMoreVideos (page: number) {
+  loadMoreVideos (page: number, loadOnTop = false) {
+    this.adjustVideoPageHeight()
+
+    const currentY = window.scrollY
+
     if (this.loadedPages[page] !== undefined) return
     if (this.loadingPage[page] === true) return
 
@@ -108,6 +125,8 @@ export abstract class AbstractVideoList implements OnInit, OnDestroy {
     observable.subscribe(
       ({ videos, totalVideos }) => {
         this.loadingPage[page] = false
+
+        if (this.firstLoadedPage === undefined || this.firstLoadedPage > page) this.firstLoadedPage = page
 
         // Paging is too high, return to the first one
         if (this.pagination.currentPage > 1 && totalVideos <= ((this.pagination.currentPage - 1) * this.pagination.itemsPerPage)) {
@@ -123,14 +142,27 @@ export abstract class AbstractVideoList implements OnInit, OnDestroy {
         // Initialize infinite scroller now we loaded the first page
         if (Object.keys(this.loadedPages).length === 1) {
           // Wait elements creation
-          setTimeout(() => this.infiniteScroller.initialize(), 500)
+          setTimeout(() => {
+            this.infiniteScroller.initialize()
+
+            // At our first load, we did not load the first page
+            // Load the previous page so the user can move on the top (and browser previous pages)
+            if (this.pagination.currentPage > 1) this.loadMoreVideos(this.pagination.currentPage - 1, true)
+          }, 500)
         }
+
+        // Insert elements on the top but keep the scroll in the previous position
+        if (loadOnTop) setTimeout(() => { window.scrollTo(0, currentY + this.pageHeight) }, 0)
       },
       error => {
         this.loadingPage[page] = false
         this.notificationsService.error(this.i18n('Error'), error.message)
       }
     )
+  }
+
+  toggleModerationDisplay () {
+    throw new Error('toggleModerationDisplay is not implemented')
   }
 
   protected hasMoreVideos () {
@@ -148,7 +180,7 @@ export abstract class AbstractVideoList implements OnInit, OnDestroy {
     const min = this.minPageLoaded()
 
     if (min > 1) {
-      this.loadMoreVideos(min - 1)
+      this.loadMoreVideos(min - 1, true)
     }
   }
 
@@ -168,7 +200,7 @@ export abstract class AbstractVideoList implements OnInit, OnDestroy {
 
   protected loadRouteParams (routeParams: { [ key: string ]: any }) {
     this.sort = routeParams['sort'] as VideoSortField || this.defaultSort
-    this.category = routeParams['category']
+    this.categoryOneOf = routeParams['categoryOneOf']
     if (routeParams['page'] !== undefined) {
       this.pagination.currentPage = parseInt(routeParams['page'], 10)
     } else {
@@ -185,6 +217,13 @@ export abstract class AbstractVideoList implements OnInit, OnDestroy {
 
   protected buildVideoPages () {
     this.videoPages = Object.values(this.loadedPages)
+  }
+
+  protected adjustVideoPageHeight () {
+    const numberOfPagesLoaded = Object.keys(this.loadedPages).length
+    if (!numberOfPagesLoaded) return
+
+    this.pageHeight = this.videosElement.nativeElement.offsetHeight / numberOfPagesLoaded
   }
 
   protected buildVideoHeight () {

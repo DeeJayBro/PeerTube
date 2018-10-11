@@ -3,7 +3,7 @@ import 'express-validator'
 import { values } from 'lodash'
 import 'multer'
 import * as validator from 'validator'
-import { UserRight, VideoPrivacy, VideoRateType } from '../../../shared'
+import { UserRight, VideoFilter, VideoPrivacy, VideoRateType } from '../../../shared'
 import {
   CONSTRAINTS_FIELDS,
   VIDEO_CATEGORIES,
@@ -17,9 +17,14 @@ import { VideoModel } from '../../models/video/video'
 import { exists, isArray, isFileValid } from './misc'
 import { VideoChannelModel } from '../../models/video/video-channel'
 import { UserModel } from '../../models/account/user'
+import * as magnetUtil from 'magnet-uri'
+import { fetchVideo, VideoFetchType } from '../video'
 
 const VIDEOS_CONSTRAINTS_FIELDS = CONSTRAINTS_FIELDS.VIDEOS
-const VIDEO_ABUSES_CONSTRAINTS_FIELDS = CONSTRAINTS_FIELDS.VIDEO_ABUSES
+
+function isVideoFilterValid (filter: VideoFilter) {
+  return filter === 'local' || filter === 'all-local'
+}
 
 function isVideoCategoryValid (value: any) {
   return value === null || VIDEO_CATEGORIES[ value ] !== undefined
@@ -70,10 +75,6 @@ function isVideoTagsValid (tags: string[]) {
   )
 }
 
-function isVideoAbuseReasonValid (value: string) {
-  return exists(value) && validator.isLength(value, VIDEO_ABUSES_CONSTRAINTS_FIELDS.REASON)
-}
-
 function isVideoViewsValid (value: string) {
   return exists(value) && validator.isInt(value + '', VIDEOS_CONSTRAINTS_FIELDS.VIEWS)
 }
@@ -110,7 +111,7 @@ function isScheduleVideoUpdatePrivacyValid (value: number) {
     )
 }
 
-function isVideoFileInfoHashValid (value: string) {
+function isVideoFileInfoHashValid (value: string | null | undefined) {
   return exists(value) && validator.isLength(value, VIDEOS_CONSTRAINTS_FIELDS.INFO_HASH)
 }
 
@@ -126,16 +127,42 @@ function isVideoFileSizeValid (value: string) {
   return exists(value) && validator.isInt(value + '', VIDEOS_CONSTRAINTS_FIELDS.FILE_SIZE)
 }
 
-async function isVideoExist (id: string, res: Response) {
-  let video: VideoModel
+function isVideoMagnetUriValid (value: string) {
+  if (!exists(value)) return false
 
-  if (validator.isInt(id)) {
-    video = await VideoModel.loadAndPopulateAccountAndServerAndTags(+id)
-  } else { // UUID
-    video = await VideoModel.loadByUUIDAndPopulateAccountAndServerAndTags(id)
+  const parsed = magnetUtil.decode(value)
+  return parsed && isVideoFileInfoHashValid(parsed.infoHash)
+}
+
+function checkUserCanManageVideo (user: UserModel, video: VideoModel, right: UserRight, res: Response) {
+  // Retrieve the user who did the request
+  if (video.isOwned() === false) {
+    res.status(403)
+       .json({ error: 'Cannot manage a video of another server.' })
+       .end()
+    return false
   }
 
-  if (!video) {
+  // Check if the user can delete the video
+  // The user can delete it if he has the right
+  // Or if s/he is the video's account
+  const account = video.VideoChannel.Account
+  if (user.hasRight(right) === false && account.userId !== user.id) {
+    res.status(403)
+       .json({ error: 'Cannot manage a video of another user.' })
+       .end()
+    return false
+  }
+
+  return true
+}
+
+async function isVideoExist (id: string, res: Response, fetchType: VideoFetchType = 'all') {
+  const userId = res.locals.oauth ? res.locals.oauth.token.User.id : undefined
+
+  const video = await fetchVideo(id, fetchType, userId)
+
+  if (video === null) {
     res.status(404)
        .json({ error: 'Video not found' })
        .end()
@@ -143,16 +170,16 @@ async function isVideoExist (id: string, res: Response) {
     return false
   }
 
-  res.locals.video = video
+  if (fetchType !== 'none') res.locals.video = video
   return true
 }
 
 async function isVideoChannelOfAccountExist (channelId: number, user: UserModel, res: Response) {
   if (user.hasRight(UserRight.UPDATE_ANY_VIDEO) === true) {
     const videoChannel = await VideoChannelModel.loadAndPopulateAccount(channelId)
-    if (!videoChannel) {
+    if (videoChannel === null) {
       res.status(400)
-         .json({ error: 'Unknown video video channel on this instance.' })
+         .json({ error: 'Unknown video `video channel` on this instance.' })
          .end()
 
       return false
@@ -163,9 +190,9 @@ async function isVideoChannelOfAccountExist (channelId: number, user: UserModel,
   }
 
   const videoChannel = await VideoChannelModel.loadByIdAndAccount(channelId, user.Account.id)
-  if (!videoChannel) {
+  if (videoChannel === null) {
     res.status(400)
-       .json({ error: 'Unknown video video channel for this account.' })
+       .json({ error: 'Unknown video `video channel` for this account.' })
        .end()
 
     return false
@@ -179,6 +206,7 @@ async function isVideoChannelOfAccountExist (channelId: number, user: UserModel,
 
 export {
   isVideoCategoryValid,
+  checkUserCanManageVideo,
   isVideoLicenceValid,
   isVideoLanguageValid,
   isVideoTruncatedDescriptionValid,
@@ -188,8 +216,8 @@ export {
   isVideoTagsValid,
   isVideoFPSResolutionValid,
   isScheduleVideoUpdatePrivacyValid,
-  isVideoAbuseReasonValid,
   isVideoFile,
+  isVideoMagnetUriValid,
   isVideoStateValid,
   isVideoViewsValid,
   isVideoRatingTypeValid,
@@ -201,5 +229,6 @@ export {
   isVideoExist,
   isVideoImage,
   isVideoChannelOfAccountExist,
-  isVideoSupportValid
+  isVideoSupportValid,
+  isVideoFilterValid
 }

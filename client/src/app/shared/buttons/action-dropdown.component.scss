@@ -1,0 +1,50 @@
+@import '_variables';
+@import '_mixins';
+
+.action-button {
+  @include peertube-button;
+
+  &.grey {
+    @include grey-button;
+  }
+
+  &.orange {
+    @include orange-button;
+  }
+
+  display: inline-block;
+  padding: 0 10px;
+
+  &::after {
+    display: none;
+  }
+
+  &:hover, &:active, &:focus {
+    background-color: $grey-color;
+  }
+
+  .icon-action {
+    @include icon(21px);
+
+    background-image: url('../../../assets/images/video/more.svg');
+    top: -1px;
+  }
+
+  &.small {
+    font-size: 14px;
+    height: 20px;
+    line-height: 20px;
+  }
+}
+
+.dropdown-toggle::after {
+  position: relative;
+  top: 1px;
+}
+
+.dropdown-menu {
+  .dropdown-item {
+    cursor: pointer;
+    color: #000 !important;
+  }
+}

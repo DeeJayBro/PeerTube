@@ -20,9 +20,11 @@ import 'whatwg-fetch'
 import * as vjs from 'video.js'
 import * as Channel from 'jschannel'
 
-import { VideoDetails } from '../../../../shared'
-import { addContextMenu, getVideojsOptions, loadLocale } from '../../assets/player/peertube-player'
+import { peertubeTranslate, ResultList, VideoDetails } from '../../../../shared'
+import { addContextMenu, getServerTranslations, getVideojsOptions, loadLocaleInVideoJS } from '../../assets/player/peertube-player'
 import { PeerTubeResolution } from '../player/definitions'
+import { VideoJSCaption } from '../../assets/player/peertube-videojs-typings'
+import { VideoCaption } from '../../../../shared/models/videos/caption/video-caption.model'
 
 /**
  * Embed API exposes control of the embed player to the outside world via
@@ -157,7 +159,7 @@ class PeerTubeEmbed {
   muted = false
   loop = false
   enableApi = false
-  startTime = 0
+  startTime: number | string = 0
   scope = 'peertube'
 
   static async main () {
@@ -178,13 +180,17 @@ class PeerTubeEmbed {
     return fetch(this.getVideoUrl(videoId))
   }
 
+  loadVideoCaptions (videoId: string): Promise<Response> {
+    return fetch(this.getVideoUrl(videoId) + '/captions')
+  }
+
   removeElement (element: HTMLElement) {
     element.parentElement.removeChild(element)
   }
 
-  displayError (videoElement: HTMLVideoElement, text: string) {
+  displayError (text: string) {
     // Remove video element
-    this.removeElement(videoElement)
+    if (this.videoElement) this.removeElement(this.videoElement)
 
     document.title = 'Sorry - ' + text
 
@@ -195,14 +201,14 @@ class PeerTubeEmbed {
     errorText.innerHTML = text
   }
 
-  videoNotFound (videoElement: HTMLVideoElement) {
+  videoNotFound () {
     const text = 'This video does not exist.'
-    this.displayError(videoElement, text)
+    this.displayError(text)
   }
 
-  videoFetchError (videoElement: HTMLVideoElement) {
+  videoFetchError () {
     const text = 'We cannot fetch the video. Please try again later.'
-    this.displayError(videoElement, text)
+    this.displayError(text)
   }
 
   getParamToggle (params: URLSearchParams, name: string, defaultValue: boolean) {
@@ -240,9 +246,7 @@ class PeerTubeEmbed {
       this.scope = this.getParamString(params, 'scope', this.scope)
 
       const startTimeParamString = params.get('start')
-      const startTimeParamNumber = parseInt(startTimeParamString, 10)
-
-      if (isNaN(startTimeParamNumber) === false) this.startTime = startTimeParamNumber
+      if (startTimeParamString) this.startTime = startTimeParamString
     } catch (err) {
       console.error('Cannot get params from URL.', err)
     }
@@ -253,16 +257,29 @@ class PeerTubeEmbed {
     const lastPart = urlParts[ urlParts.length - 1 ]
     const videoId = lastPart.indexOf('?') === -1 ? lastPart : lastPart.split('?')[ 0 ]
 
-    await loadLocale(window.location.origin, vjs, navigator.language)
-    let response = await this.loadVideoInfo(videoId)
+    const [ , serverTranslations, videoResponse, captionsResponse ] = await Promise.all([
+      loadLocaleInVideoJS(window.location.origin, vjs, navigator.language),
+      getServerTranslations(window.location.origin, navigator.language),
+      this.loadVideoInfo(videoId),
+      this.loadVideoCaptions(videoId)
+    ])
 
-    if (!response.ok) {
-      if (response.status === 404) return this.videoNotFound(this.videoElement)
+    if (!videoResponse.ok) {
+      if (videoResponse.status === 404) return this.videoNotFound()
 
-      return this.videoFetchError(this.videoElement)
+      return this.videoFetchError()
     }
 
-    const videoInfo: VideoDetails = await response.json()
+    const videoInfo: VideoDetails = await videoResponse.json()
+    let videoCaptions: VideoJSCaption[] = []
+    if (captionsResponse.ok) {
+      const { data } = (await captionsResponse.json()) as ResultList<VideoCaption>
+      videoCaptions = data.map(c => ({
+        label: peertubeTranslate(c.language.label, serverTranslations),
+        language: c.language.id,
+        src: window.location.origin + c.captionPath
+      }))
+    }
 
     this.loadParams()
 
@@ -273,6 +290,7 @@ class PeerTubeEmbed {
       loop: this.loop,
       startTime: this.startTime,
 
+      videoCaptions,
       inactivityTimeout: 1500,
       videoViewUrl: this.getVideoUrl(videoId) + '/views',
       playerElement: this.videoElement,
@@ -286,6 +304,7 @@ class PeerTubeEmbed {
 
     this.playerOptions = videojsOptions
     this.player = vjs(this.videoContainerId, videojsOptions, () => {
+      this.player.on('customError', (event, data) => this.handleError(data.err))
 
       window[ 'videojsPlayer' ] = this.player
 
@@ -297,8 +316,18 @@ class PeerTubeEmbed {
       }
 
       addContextMenu(this.player, window.location.origin + videoInfo.embedPath)
+
       this.initializeApi()
     })
+  }
+
+  private handleError (err: Error) {
+    if (err.message.indexOf('from xs param') !== -1) {
+      this.player.dispose()
+      this.videoElement = null
+      this.displayError('This video is not available because the remote instance is not responding.')
+      return
+    }
   }
 }
 

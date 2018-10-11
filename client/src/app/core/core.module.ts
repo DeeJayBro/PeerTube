@@ -8,13 +8,15 @@ import { LoadingBarHttpClientModule } from '@ngx-loading-bar/http-client'
 import { LoadingBarRouterModule } from '@ngx-loading-bar/router'
 
 import { SimpleNotificationsModule } from 'angular2-notifications'
-import { ModalModule } from 'ngx-bootstrap/modal'
 
 import { AuthService } from './auth'
 import { ConfirmComponent, ConfirmService } from './confirm'
 import { throwIfAlreadyLoaded } from './module-import-guard'
 import { LoginGuard, RedirectService, UserRightGuard } from './routing'
 import { ServerService } from './server'
+import { ThemeService } from './theme'
+import { HotkeyModule } from 'angular2-hotkeys'
+import { CheatSheetComponent } from '@app/core/hotkeys'
 
 @NgModule({
   imports: [
@@ -23,16 +25,20 @@ import { ServerService } from './server'
     FormsModule,
     BrowserAnimationsModule,
 
-    ModalModule,
     SimpleNotificationsModule.forRoot(),
 
     LoadingBarHttpClientModule,
     LoadingBarRouterModule,
-    LoadingBarModule.forRoot()
+    LoadingBarModule.forRoot(),
+
+    HotkeyModule.forRoot({
+      cheatSheetCloseEsc: true
+    })
   ],
 
   declarations: [
-    ConfirmComponent
+    ConfirmComponent,
+    CheatSheetComponent
   ],
 
   exports: [
@@ -40,13 +46,15 @@ import { ServerService } from './server'
     LoadingBarHttpClientModule,
     LoadingBarModule,
 
-    ConfirmComponent
+    ConfirmComponent,
+    CheatSheetComponent
   ],
 
   providers: [
     AuthService,
     ConfirmService,
     ServerService,
+    ThemeService,
     LoginGuard,
     UserRightGuard,
     RedirectService

@@ -14,18 +14,24 @@ function activityPubContextify <T> (data: T) {
       'https://w3id.org/security/v1',
       {
         RsaSignature2017: 'https://w3id.org/security#RsaSignature2017',
+        pt: 'https://joinpeertube.org/ns',
+        schema: 'http://schema.org#',
         Hashtag: 'as:Hashtag',
-        uuid: 'http://schema.org/identifier',
-        category: 'http://schema.org/category',
-        licence: 'http://schema.org/license',
+        uuid: 'schema:identifier',
+        category: 'schema:category',
+        licence: 'schema:license',
+        subtitleLanguage: 'schema:subtitleLanguage',
         sensitive: 'as:sensitive',
-        language: 'http://schema.org/inLanguage',
-        views: 'http://schema.org/Number',
-        stats: 'http://schema.org/Number',
-        size: 'http://schema.org/Number',
-        commentsEnabled: 'http://schema.org/Boolean',
-        waitTranscoding: 'http://schema.org/Boolean',
-        support: 'http://schema.org/Text'
+        language: 'schema:inLanguage',
+        views: 'schema:Number',
+        stats: 'schema:Number',
+        size: 'schema:Number',
+        fps: 'schema:Number',
+        commentsEnabled: 'schema:Boolean',
+        waitTranscoding: 'schema:Boolean',
+        expires: 'schema:expires',
+        support: 'schema:Text',
+        CacheFile: 'pt:CacheFile'
       },
       {
         likes: {
@@ -66,8 +72,8 @@ async function activityPubCollectionPagination (url: string, handler: ActivityPu
   const { start, count } = pageToStartAndCount(page, ACTIVITY_PUB.COLLECTION_ITEMS_PER_PAGE)
   const result = await handler(start, count)
 
-  let next: string
-  let prev: string
+  let next: string | undefined
+  let prev: string | undefined
 
   // Assert page is a number
   page = parseInt(page, 10)

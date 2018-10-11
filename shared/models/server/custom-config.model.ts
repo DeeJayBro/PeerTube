@@ -25,11 +25,16 @@ export interface CustomConfig {
     previews: {
       size: number
     }
+
+    captions: {
+      size: number
+    }
   }
 
   signup: {
     enabled: boolean
     limit: number
+    requiresEmailVerification: boolean
   }
 
   admin: {
@@ -38,6 +43,7 @@ export interface CustomConfig {
 
   user: {
     videoQuota: number
+    videoQuotaDaily: number
   }
 
   transcoding: {
@@ -49,6 +55,17 @@ export interface CustomConfig {
       '480p': boolean
       '720p': boolean
       '1080p': boolean
+    }
+  }
+
+  import: {
+    videos: {
+      http: {
+        enabled: boolean
+      },
+      torrent: {
+        enabled: boolean
+      }
     }
   }
 }

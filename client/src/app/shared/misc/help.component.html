@@ -13,10 +13,15 @@
 </ng-template>
 
 <span
+  role="button"
   class="help-tooltip-button"
+  container="body"
   title="Get help"
   i18n-title
-  [popover]="tooltipTemplate"
+  [attr.aria-pressed]="isPopoverOpened"
+  [ngbPopover]="tooltipTemplate"
   [placement]="tooltipPlacement"
-  [outsideClick]="true"
+  [autoClose]="true"
+  (onHidden)="onPopoverHidden()"
+  (onShown)="onPopoverShown()"
 ></span>

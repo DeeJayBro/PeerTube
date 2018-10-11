@@ -7,20 +7,20 @@ function makeGetRequest (options: {
   path: string,
   query?: any,
   token?: string,
-  statusCodeExpected?: number
+  statusCodeExpected?: number,
+  contentType?: string
 }) {
   if (!options.statusCodeExpected) options.statusCodeExpected = 400
+  if (options.contentType === undefined) options.contentType = 'application/json'
 
   const req = request(options.url)
     .get(options.path)
-    .set('Accept', 'application/json')
 
+  if (options.contentType) req.set('Accept', options.contentType)
   if (options.token) req.set('Authorization', 'Bearer ' + options.token)
   if (options.query) req.query(options.query)
 
-  return req
-    .expect('Content-Type', /json/)
-    .expect(options.statusCodeExpected)
+  return req.expect(options.statusCodeExpected)
 }
 
 function makeDeleteRequest (options: {
@@ -48,7 +48,7 @@ function makeUploadRequest (options: {
   path: string,
   token?: string,
   fields: { [ fieldName: string ]: any },
-  attaches: { [ attachName: string ]: any },
+  attaches: { [ attachName: string ]: any | any[] },
   statusCodeExpected?: number
 }) {
   if (!options.statusCodeExpected) options.statusCodeExpected = 400
@@ -78,7 +78,11 @@ function makeUploadRequest (options: {
 
   Object.keys(options.attaches).forEach(attach => {
     const value = options.attaches[attach]
-    req.attach(attach, buildAbsoluteFixturePath(value))
+    if (Array.isArray(value)) {
+      req.attach(attach, buildAbsoluteFixturePath(value[0]), value[1])
+    } else {
+      req.attach(attach, buildAbsoluteFixturePath(value))
+    }
   })
 
   return req.expect(options.statusCodeExpected)
@@ -123,6 +127,13 @@ function makePutBodyRequest (options: {
             .expect(options.statusCodeExpected)
 }
 
+function makeHTMLRequest (url: string, path: string) {
+  return request(url)
+    .get(path)
+    .set('Accept', 'text/html')
+    .expect(200)
+}
+
 function updateAvatarRequest (options: {
   url: string,
   path: string,
@@ -149,6 +160,7 @@ function updateAvatarRequest (options: {
 // ---------------------------------------------------------------------------
 
 export {
+  makeHTMLRequest,
   makeGetRequest,
   makeUploadRequest,
   makePostBodyRequest,

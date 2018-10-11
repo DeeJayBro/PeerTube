@@ -1,6 +1,8 @@
-import { Component, Input, OnInit, ViewChild } from '@angular/core'
-import { ModalDirective } from 'ngx-bootstrap/modal'
+import { Component, ElementRef, Input, OnInit, ViewChild } from '@angular/core'
 import { VideoDetails } from '../../../shared/video/video-details.model'
+import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
+import { I18n } from '@ngx-translate/i18n-polyfill'
+import { NotificationsService } from 'angular2-notifications'
 
 @Component({
   selector: 'my-video-download',
@@ -10,28 +12,30 @@ import { VideoDetails } from '../../../shared/video/video-details.model'
 export class VideoDownloadComponent implements OnInit {
   @Input() video: VideoDetails = null
 
-  @ViewChild('modal') modal: ModalDirective
+  @ViewChild('modal') modal: ElementRef
 
   downloadType: 'direct' | 'torrent' | 'magnet' = 'torrent'
   resolutionId: number | string = -1
 
-  constructor () {
-    // empty
-  }
+  constructor (
+    private notificationsService: NotificationsService,
+    private modalService: NgbModal,
+    private i18n: I18n
+  ) { }
 
   ngOnInit () {
     this.resolutionId = this.video.files[0].resolution.id
   }
 
   show () {
-    this.modal.show()
-  }
-
-  hide () {
-    this.modal.hide()
+    this.modalService.open(this.modal)
   }
 
   download () {
+    window.location.assign(this.getLink())
+  }
+
+  getLink () {
     // HTML select send us a string, so convert it to a number
     this.resolutionId = parseInt(this.resolutionId.toString(), 10)
 
@@ -54,6 +58,11 @@ export class VideoDownloadComponent implements OnInit {
         }
       }
     })()
-    window.location.assign(link)
+
+    return link
+  }
+
+  activateCopiedMessage () {
+    this.notificationsService.success(this.i18n('Success'), this.i18n('Copied'))
   }
 }

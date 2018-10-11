@@ -1,14 +1,14 @@
 import * as passwordGenerator from 'password-generator'
 import { UserRole } from '../../shared'
-import { mkdirpPromise, rimrafPromise } from '../helpers/core-utils'
 import { logger } from '../helpers/logger'
 import { createApplicationActor, createUserAccountAndChannel } from '../lib/user'
 import { UserModel } from '../models/account/user'
 import { ApplicationModel } from '../models/application/application'
 import { OAuthClientModel } from '../models/oauth/oauth-client'
-import { applicationExist, clientsExist, usersExist } from './checker'
+import { applicationExist, clientsExist, usersExist } from './checker-after-init'
 import { CACHE, CONFIG, LAST_MIGRATION_VERSION } from './constants'
 import { sequelizeTypescript } from './database'
+import { remove, ensureDir } from 'fs-extra'
 
 async function installApplication () {
   try {
@@ -33,14 +33,15 @@ export {
 // ---------------------------------------------------------------------------
 
 function removeCacheDirectories () {
-  const cacheDirectories = CACHE.DIRECTORIES
+  const cacheDirectories = Object.keys(CACHE)
+    .map(k => CACHE[k].DIRECTORY)
 
   const tasks: Promise<any>[] = []
 
   // Cache directories
   for (const key of Object.keys(cacheDirectories)) {
     const dir = cacheDirectories[key]
-    tasks.push(rimrafPromise(dir))
+    tasks.push(remove(dir))
   }
 
   return Promise.all(tasks)
@@ -48,18 +49,19 @@ function removeCacheDirectories () {
 
 function createDirectoriesIfNotExist () {
   const storage = CONFIG.STORAGE
-  const cacheDirectories = CACHE.DIRECTORIES
+  const cacheDirectories = Object.keys(CACHE)
+                                 .map(k => CACHE[k].DIRECTORY)
 
-  const tasks = []
+  const tasks: Promise<void>[] = []
   for (const key of Object.keys(storage)) {
     const dir = storage[key]
-    tasks.push(mkdirpPromise(dir))
+    tasks.push(ensureDir(dir))
   }
 
   // Cache directories
   for (const key of Object.keys(cacheDirectories)) {
     const dir = cacheDirectories[key]
-    tasks.push(mkdirpPromise(dir))
+    tasks.push(ensureDir(dir))
   }
 
   return Promise.all(tasks)
@@ -120,8 +122,10 @@ async function createOAuthAdminIfNotExist () {
     email,
     password,
     role,
+    verified: true,
     nsfwPolicy: CONFIG.INSTANCE.DEFAULT_NSFW_POLICY,
-    videoQuota: -1
+    videoQuota: -1,
+    videoQuotaDaily: -1
   }
   const user = new UserModel(userData)
 

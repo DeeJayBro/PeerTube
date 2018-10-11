@@ -1,18 +1,51 @@
 @import '_variables';
 @import '_mixins';
+@import '_bootstrap-variables';
+
+$other-videos-width: 260px;
+
+.root-row {
+  flex-direction: column;
+}
+
+.blacklisted-label {
+  font-weight: $font-semibold;
+}
 
 #video-element-wrapper {
   background-color: #000;
   display: flex;
   justify-content: center;
+  flex-grow: 1;
+
+  .remote-server-down {
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    justify-content: center;
+    background-color: #141313;
+    width: 100%;
+    font-size: 24px;
+    height: 500px;
+
+    @media screen and (max-width: 1000px) {
+      font-size: 20px;
+    }
+
+    @media screen and (max-width: 600px) {
+      font-size: 16px;
+    }
+  }
 
   /deep/ .video-js {
     width: 888px;
     height: 500px;
 
-    @media screen and (max-width: 600px) {
-      width: 100vw;
-      height: calc(100vw / 1.7); // 16/9
+    &.vjs-theater-enabled {
+      height: calc(100vh - #{$header-height} - #{$theater-bottom-space});
+      width: 100%;
     }
 
     // VideoJS create an inner video player
@@ -22,9 +55,12 @@
     }
   }
 
-  /deep/ .video-js.vjs-theater-enabled {
-    width: 100%;
-    height: calc(100vh - #{$header-height} - #{$theater-bottom-space});
+  @media screen and (max-width: 600px) {
+    .remote-server-down,
+    /deep/ .video-js {
+      width: 100vw;
+      height: calc(100vw / 1.7); // 16/9
+    }
   }
 }
 
@@ -43,13 +79,12 @@
 
 .video-bottom {
   margin-top: 40px;
-  display: flex;
 
   .video-info {
     flex-grow: 1;
-    margin-right: 40px;
     // Set min width for flex item
     min-width: 1px;
+    max-width: 100%;
 
     .video-info-first-row {
       display: flex;
@@ -67,9 +102,10 @@
       }
 
       .video-info-date-views {
-        font-size: 16px;
-        margin-bottom: 10px;
         flex-grow: 1;
+        margin-bottom: 10px;
+        margin-right: 10px;
+        font-size: 16px;
       }
 
       .video-info-channel {
@@ -79,7 +115,7 @@
         a {
           @include disable-default-a-behaviour;
 
-          color: #000;
+          color: var(--mainForegroundColor);
 
           &:hover {
             opacity: 0.8;
@@ -92,28 +128,37 @@
           }
         }
 
-        my-help {
-          display: inline-block;
+        my-subscribe-button {
+          margin-left: 5px;
         }
       }
 
-      .video-info-by a {
-        @include disable-default-a-behaviour;
+      .video-info-by {
 
-        display: inline;
-        align-items: center;
-        font-size: 13px;
-        color: #000;
+        a {
+          @include disable-default-a-behaviour;
 
-        span:hover {
-          opacity: 0.8;
+          display: inline;
+          align-items: center;
+          font-size: 13px;
+          color: var(--mainForegroundColor);
+
+          span:hover {
+            opacity: 0.8;
+          }
+
+          img {
+            @include avatar(18px);
+
+            margin-top: -2px;
+            margin-left: 7px;
+          }
         }
 
-        img {
-          @include avatar(18px);
-
-          margin-top: -2px;
-          margin-left: 7px;
+        my-help {
+          position: relative;
+          top: 1px;
+          margin-left: 2px;
         }
       }
 
@@ -123,9 +168,8 @@
       }
 
       .video-actions-rates {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
+        margin: 20px 0 10px 0;
+        align-items: start;
 
         .video-actions {
           height: 40px; // Align with the title
@@ -145,6 +189,10 @@
             display: inline-block;
             padding: 0 10px 0 10px;
             white-space: nowrap;
+
+            &::after {
+              display: none;
+            }
 
             .icon {
               @include icon(21px);
@@ -179,7 +227,7 @@
             }
 
             &.action-button-like.activated {
-              background-color: #39CC0B;
+              background-color: $green;
 
               .icon-like {
                 background-image: url('../../../assets/images/video/like-white.svg');
@@ -187,7 +235,7 @@
             }
 
             &.action-button-dislike.activated {
-              background-color: #FF0000;
+              background-color: $red;
 
               .icon-dislike {
                 background-image: url('../../../assets/images/video/dislike-white.svg');
@@ -223,20 +271,31 @@
                 &.icon-blacklist {
                   background-image: url('../../../assets/images/video/blacklist.svg');
                 }
+
+                &.icon-unblacklist {
+                  background-image: url('../../../assets/images/global/undo.svg');
+                }
+
+                &.icon-delete {
+                  background-image: url('../../../assets/images/global/delete-black.svg');
+                }
               }
             }
           }
         }
 
         .video-info-likes-dislikes-bar {
-          height: 5px;
+          $likes-bar-height: 2px;
+          height: $likes-bar-height;
+          margin-top: -$likes-bar-height;
           width: 186px;
-          background-color: #E5E5E5;
-          margin-top: 25px;
+          background-color: $red;
+          position: relative;
+          top: 10px;
 
           .likes-bar {
             height: 100%;
-            background-color: #39CC0B;
+            background-color: $green;
           }
         }
       }
@@ -277,33 +336,61 @@
       margin-bottom: 12px;
 
       .video-attribute-label {
-        width: 86px;
+        min-width: 91px;
+        padding-right: 5px;
         display: inline-block;
         color: #585858;
         font-weight: $font-bold;
       }
+
+      a.video-attribute-value {
+        @include disable-default-a-behaviour;
+        color: var(--mainForegroundColor);
+
+        &:hover {
+          opacity: 0.9;
+        }
+      }
+
+      &.video-attribute-tags {
+        .video-attribute-value:not(:nth-child(2)) {
+          &::before {
+            content: ', '
+          }
+        }
+      }
     }
   }
 
-  .other-videos {
-    padding-left: 1em;
+  /deep/ .other-videos {
+    padding-left: 15px;
+    width: $other-videos-width;
 
     .title-page {
-      margin-top: 0;
+      margin-top: 0 !important;
     }
 
-    /deep/ .video-miniature {
+    .video-miniature {
       display: flex;
       height: 100%;
       margin-bottom: 20px;
       flex-wrap: wrap;
 
       .video-miniature-information {
-        margin-left: 10px;
         flex-grow: 1;
+      }
+
+      .video-thumbnail {
+        margin-right: 10px
       }
     }
   }
+}
+
+my-video-comments {
+  display: inline-block;
+  width: 100%;
+  margin-bottom: 20px;
 }
 
 // If the view is not expanded, take into account the menu
@@ -311,9 +398,16 @@
   width: calc(100% - #{$menu-width});
 }
 
+@media screen and (max-width: $small-view) {
+  .privacy-concerns {
+    margin-left: $menu-width;
+  }
+}
+
 :host-context(.expanded) {
   .privacy-concerns {
     width: 100%;
+    margin-left: 0;
   }
 }
 
@@ -336,7 +430,7 @@
   a {
     @include disable-default-a-behaviour;
 
-    color: $orange-color;
+    color: var(--mainColor);
     transition: color 0.3s;
 
     &:hover {
@@ -345,7 +439,7 @@
   }
 
   .privacy-concerns-okay {
-    background-color: $orange-color;
+    background-color: var(--mainColor);
     padding: 5px 8px 5px 7px;
     margin-left: auto;
     border-radius: 3px;
@@ -359,51 +453,19 @@
   }
 }
 
+@media screen and (min-width: map-get($grid-breakpoints, xl)) {
+  .video-bottom .video-info {
+    max-width: calc(100% - #{$other-videos-width});
+  }
+}
 
 @media screen and (max-width: 1600px) {
-  .video-bottom {
-    .video-info {
-      margin-right: 20px;
-
-      .video-info-first-row {
-        flex-direction: column;
-        margin-bottom: 30px;
-
-        .video-actions-rates {
-          margin-top: 20px;
-          align-items: start;
-
-          .video-info-likes-dislikes-bar {
-            margin-top: 10px;
-          }
-        }
-      }
-
-      .video-info-date-views {
-        flex-direction: column;
-        margin-bottom: 30px;
-
-        .video-info-likes-dislikes-bar {
-          margin-top: 0;
-        }
-      }
-
-      .video-attributes .video-attribute {
-        margin-bottom: 5px;
-      }
-    }
+  .video-bottom .video-info .video-attributes .video-attribute {
+    margin-bottom: 5px;
   }
 }
 
 @media screen and (max-width: 1300px) {
-  .video-bottom {
-    flex-direction: column;
-  }
-
-  .other-videos {
-    padding-left: 0;
-  }
-
   .privacy-concerns {
     font-size: 12px;
     padding: 2px 5px;
@@ -419,6 +481,7 @@
     margin: 20px 0 0 0;
 
     .video-info {
+      padding: 0;
 
       .video-info-first-row {
 
@@ -427,6 +490,14 @@
           height: auto;
         }
       }
+    }
+  }
+
+  /deep/ .other-videos {
+    padding-left: 0 !important;
+
+    /deep/ .video-miniature  {
+      flex-direction: column;
     }
   }
 
@@ -440,7 +511,27 @@
 }
 
 @media screen and (max-width: 450px) {
-  .video-bottom  .action-button .icon-text {
-    display: none !important;
+  .video-bottom {
+    .action-button .icon-text {
+      display: none !important;
+    }
+
+    .video-info .video-info-first-row {
+      .video-info-name {
+        font-size: 18px;
+      }
+
+      .video-info-date-views {
+        font-size: 14px;
+      }
+
+      .video-actions-rates {
+        margin-top: 10px;
+      }
+    }
+
+    .video-info-description {
+      font-size: 14px !important;
+    }
   }
 }

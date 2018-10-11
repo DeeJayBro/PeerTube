@@ -1,31 +1,34 @@
 import { catchError } from 'rxjs/operators'
-import { Component, ElementRef, Inject, LOCALE_ID, NgZone, OnDestroy, OnInit, ViewChild } from '@angular/core'
+import { ChangeDetectorRef, Component, ElementRef, Inject, LOCALE_ID, NgZone, OnDestroy, OnInit, ViewChild } from '@angular/core'
 import { ActivatedRoute, Router } from '@angular/router'
 import { RedirectService } from '@app/core/routing/redirect.service'
 import { peertubeLocalStorage } from '@app/shared/misc/peertube-local-storage'
 import { VideoSupportComponent } from '@app/videos/+video-watch/modal/video-support.component'
 import { MetaService } from '@ngx-meta/core'
 import { NotificationsService } from 'angular2-notifications'
-import { Subscription } from 'rxjs'
+import { forkJoin, Subscription } from 'rxjs'
 import * as videojs from 'video.js'
 import 'videojs-hotkeys'
+import { Hotkey, HotkeysService } from 'angular2-hotkeys'
 import * as WebTorrent from 'webtorrent'
-import { UserVideoRateType, VideoPrivacy, VideoRateType, VideoState } from '../../../../../shared'
+import { UserVideoRateType, VideoCaption, VideoPrivacy, VideoRateType, VideoState } from '../../../../../shared'
 import '../../../assets/player/peertube-videojs-plugin'
 import { AuthService, ConfirmService } from '../../core'
 import { RestExtractor, VideoBlacklistService } from '../../shared'
 import { VideoDetails } from '../../shared/video/video-details.model'
-import { Video } from '../../shared/video/video.model'
 import { VideoService } from '../../shared/video/video.service'
 import { MarkdownService } from '../shared'
 import { VideoDownloadComponent } from './modal/video-download.component'
 import { VideoReportComponent } from './modal/video-report.component'
 import { VideoShareComponent } from './modal/video-share.component'
-import { addContextMenu, getVideojsOptions, loadLocale } from '../../../assets/player/peertube-player'
+import { VideoBlacklistComponent } from './modal/video-blacklist.component'
+import { SubscribeButtonComponent } from '@app/shared/user-subscription/subscribe-button.component'
+import { addContextMenu, getVideojsOptions, loadLocaleInVideoJS } from '../../../assets/player/peertube-player'
 import { ServerService } from '@app/core'
 import { I18n } from '@ngx-translate/i18n-polyfill'
 import { environment } from '../../../environments/environment'
 import { getDevLocale, isOnDevLocale } from '@app/shared/i18n/i18n-utils'
+import { VideoCaptionService } from '@app/shared/video-caption'
 
 @Component({
   selector: 'my-video-watch',
@@ -39,8 +42,8 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
   @ViewChild('videoShareModal') videoShareModal: VideoShareComponent
   @ViewChild('videoReportModal') videoReportModal: VideoReportComponent
   @ViewChild('videoSupportModal') videoSupportModal: VideoSupportComponent
-
-  otherVideosDisplayed: Video[] = []
+  @ViewChild('videoBlacklistModal') videoBlacklistModal: VideoBlacklistComponent
+  @ViewChild('subscribeButton') subscribeButton: SubscribeButtonComponent
 
   player: videojs.Player
   playerElement: HTMLVideoElement
@@ -54,13 +57,15 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
   videoHTMLDescription = ''
   likesBarTooltipText = ''
   hasAlreadyAcceptedPrivacyConcern = false
+  remoteServerDown = false
+  hotkeys: Hotkey[]
 
   private videojsLocaleLoaded = false
-  private otherVideos: Video[] = []
   private paramsSub: Subscription
 
   constructor (
     private elementRef: ElementRef,
+    private changeDetector: ChangeDetectorRef,
     private route: ActivatedRoute,
     private router: Router,
     private videoService: VideoService,
@@ -74,7 +79,9 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
     private markdownService: MarkdownService,
     private zone: NgZone,
     private redirectService: RedirectService,
+    private videoCaptionService: VideoCaptionService,
     private i18n: I18n,
+    private hotkeysService: HotkeysService,
     @Inject(LOCALE_ID) private localeId: string
   ) {}
 
@@ -90,16 +97,6 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
       this.hasAlreadyAcceptedPrivacyConcern = true
     }
 
-    this.videoService.getVideos({ currentPage: 1, itemsPerPage: 5 }, '-createdAt')
-        .subscribe(
-          data => {
-            this.otherVideos = data.videos
-            this.updateOtherVideosDisplayed()
-          },
-
-          err => console.error(err)
-        )
-
     this.paramsSub = this.route.params.subscribe(routeParams => {
       const uuid = routeParams[ 'uuid' ]
 
@@ -109,15 +106,38 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
       if (this.player) this.player.pause()
 
       // Video did change
-      this.videoService
-          .getVideo(uuid)
-          .pipe(catchError(err => this.restExtractor.redirectTo404IfNotFound(err, [ 400, 404 ])))
-          .subscribe(video => {
-            const startTime = this.route.snapshot.queryParams.start
-            this.onVideoFetched(video, startTime)
-                .catch(err => this.handleError(err))
-          })
+      forkJoin(
+        this.videoService.getVideo(uuid),
+        this.videoCaptionService.listCaptions(uuid)
+      )
+        .pipe(
+          // If 401, the video is private or blacklisted so redirect to 404
+          catchError(err => this.restExtractor.redirectTo404IfNotFound(err, [ 400, 401, 404 ]))
+        )
+        .subscribe(([ video, captionsResult ]) => {
+          const startTime = this.route.snapshot.queryParams.start
+          this.onVideoFetched(video, captionsResult.data, startTime)
+              .catch(err => this.handleError(err))
+        })
     })
+
+    this.hotkeys = [
+      new Hotkey('shift+l', (event: KeyboardEvent): boolean => {
+        this.setLike()
+        return false
+      }, undefined, this.i18n('Like the video')),
+      new Hotkey('shift+d', (event: KeyboardEvent): boolean => {
+        this.setDislike()
+        return false
+      }, undefined, this.i18n('Dislike the video')),
+      new Hotkey('shift+s', (event: KeyboardEvent): boolean => {
+        this.subscribeButton.subscribed ?
+          this.subscribeButton.unsubscribe() :
+          this.subscribeButton.subscribe()
+        return false
+      }, undefined, this.i18n('Subscribe to the account'))
+    ]
+    if (this.isUserLoggedIn()) this.hotkeysService.add(this.hotkeys)
   }
 
   ngOnDestroy () {
@@ -125,6 +145,9 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
 
     // Unsubscribe subscriptions
     this.paramsSub.unsubscribe()
+
+    // Unbind hotkeys
+    if (this.isUserLoggedIn()) this.hotkeysService.remove(this.hotkeys)
   }
 
   setLike () {
@@ -145,26 +168,6 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
     } else {
       this.setRating('dislike')
     }
-  }
-
-  async blacklistVideo (event: Event) {
-    event.preventDefault()
-
-    const res = await this.confirmService.confirm(this.i18n('Do you really want to blacklist this video?'), this.i18n('Blacklist'))
-    if (res === false) return
-
-    this.videoBlacklistService.blacklistVideo(this.video.id)
-        .subscribe(
-          () => {
-            this.notificationsService.success(
-              this.i18n('Success'),
-              this.i18n('Video {{videoName}} had been blacklisted.', { videoName: this.video.name })
-            )
-            this.redirectService.redirectToHomepage()
-          },
-
-          error => this.notificationsService.error(this.i18n('Error'), error.message)
-        )
   }
 
   showMoreDescription () {
@@ -213,12 +216,44 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
   }
 
   showShareModal () {
-    this.videoShareModal.show()
+    const currentTime = this.player ? this.player.currentTime() : undefined
+
+    this.videoShareModal.show(currentTime)
   }
 
   showDownloadModal (event: Event) {
     event.preventDefault()
     this.videoDownloadModal.show()
+  }
+
+  showBlacklistModal (event: Event) {
+    event.preventDefault()
+    this.videoBlacklistModal.show()
+  }
+
+  async unblacklistVideo (event: Event) {
+    event.preventDefault()
+
+    const confirmMessage = this.i18n(
+      'Do you really want to remove this video from the blacklist? It will be available again in the videos list.'
+    )
+
+    const res = await this.confirmService.confirm(confirmMessage, this.i18n('Unblacklist'))
+    if (res === false) return
+
+    this.videoBlacklistService.removeVideoFromBlacklist(this.video.id).subscribe(
+      () => {
+        this.notificationsService.success(
+          this.i18n('Success'),
+          this.i18n('Video {{name}} removed from the blacklist.', { name: this.video.name })
+        )
+
+        this.video.blacklisted = false
+        this.video.blacklistedReason = null
+      },
+
+      err => this.notificationsService.error(this.i18n('Error'), err.message)
+    )
   }
 
   isUserLoggedIn () {
@@ -233,16 +268,14 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
     return this.video.isBlackistableBy(this.user)
   }
 
-  getVideoPoster () {
-    if (!this.video) return ''
-
-    return this.video.previewUrl
+  isVideoUnblacklistable () {
+    return this.video.isUnblacklistableBy(this.user)
   }
 
   getVideoTags () {
     if (!this.video || Array.isArray(this.video.tags) === false) return []
 
-    return this.video.tags.join(', ')
+    return this.video.tags
   }
 
   isVideoRemovable () {
@@ -280,6 +313,10 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
     return this.video && this.video.state.id === VideoState.TO_TRANSCODE
   }
 
+  isVideoToImport () {
+    return this.video && this.video.state.id === VideoState.TO_IMPORT
+  }
+
   hasVideoScheduledPublication () {
     return this.video && this.video.scheduledUpdate !== undefined
   }
@@ -304,15 +341,16 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
     const errorMessage: string = typeof err === 'string' ? err : err.message
     if (!errorMessage) return
 
-    let message = ''
+    // Display a message in the video player instead of a notification
+    if (errorMessage.indexOf('from xs param') !== -1) {
+      this.flushPlayer()
+      this.remoteServerDown = true
+      this.changeDetector.detectChanges()
 
-    if (errorMessage.indexOf('http error') !== -1) {
-      message = this.i18n('Cannot fetch video from server, maybe down.')
-    } else {
-      message = errorMessage
+      return
     }
 
-    this.notificationsService.error(this.i18n('Error'), message)
+    this.notificationsService.error(this.i18n('Error'), errorMessage)
   }
 
   private checkUserRating () {
@@ -331,14 +369,17 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
         )
   }
 
-  private async onVideoFetched (video: VideoDetails, startTime = 0) {
+  private async onVideoFetched (video: VideoDetails, videoCaptions: VideoCaption[], startTimeFromUrl: number) {
     this.video = video
 
     // Re init attributes
     this.descriptionLoading = false
     this.completeDescriptionShown = false
+    this.remoteServerDown = false
 
-    this.updateOtherVideosDisplayed()
+    let startTime = startTimeFromUrl || (this.video.userHistory ? this.video.userHistory.currentTime : 0)
+    // Don't start the video if we are at the end
+    if (this.video.duration - startTime <= 1) startTime = 0
 
     if (this.video.isVideoNSFWForUser(this.user, this.serverService.getConfig())) {
       const res = await this.confirmService.confirm(
@@ -358,10 +399,17 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
     this.playerElement.setAttribute('playsinline', 'true')
     playerElementWrapper.appendChild(this.playerElement)
 
+    const playerCaptions = videoCaptions.map(c => ({
+      label: c.language.label,
+      language: c.language.id,
+      src: environment.apiUrl + c.captionPath
+    }))
+
     const videojsOptions = getVideojsOptions({
       autoplay: this.isAutoplay(),
       inactivityTimeout: 2500,
       videoFiles: this.video.files,
+      videoCaptions: playerCaptions,
       playerElement: this.playerElement,
       videoViewUrl: this.video.privacy.id !== VideoPrivacy.PRIVATE ? this.videoService.getVideoViewUrl(this.video.uuid) : null,
       videoDuration: this.video.duration,
@@ -369,11 +417,17 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
       peertubeLink: false,
       poster: this.video.previewUrl,
       startTime,
-      theaterMode: true
+      theaterMode: true,
+      language: this.localeId,
+
+      userWatching: this.user ? {
+        url: this.videoService.getUserWatchingVideoUrl(this.video.uuid),
+        authorizationHeader: this.authService.getRequestHeaderValue()
+      } : undefined
     })
 
     if (this.videojsLocaleLoaded === false) {
-      await loadLocale(environment.apiUrl, videojs, isOnDevLocale() ? getDevLocale() : this.localeId)
+      await loadLocaleInVideoJS(environment.apiUrl, videojs, isOnDevLocale() ? getDevLocale() : this.localeId)
       this.videojsLocaleLoaded = true
     }
 
@@ -437,12 +491,6 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
 
     this.video.buildLikeAndDislikePercents()
     this.setVideoLikesBarTooltipText()
-  }
-
-  private updateOtherVideosDisplayed () {
-    if (this.video && this.otherVideos && this.otherVideos.length > 0) {
-      this.otherVideosDisplayed = this.otherVideos.filter(v => v.uuid !== this.video.uuid)
-    }
   }
 
   private setOpenGraphTags () {

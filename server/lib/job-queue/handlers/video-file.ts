@@ -1,13 +1,14 @@
 import * as Bull from 'bull'
 import { VideoResolution, VideoState } from '../../../../shared'
 import { logger } from '../../../helpers/logger'
-import { computeResolutionsToTranscode } from '../../../helpers/utils'
 import { VideoModel } from '../../../models/video/video'
 import { JobQueue } from '../job-queue'
 import { federateVideoIfNeeded } from '../../activitypub'
 import { retryTransactionWrapper } from '../../../helpers/database-utils'
 import { sequelizeTypescript } from '../../../initializers'
 import * as Bluebird from 'bluebird'
+import { computeResolutionsToTranscode } from '../../../helpers/ffmpeg-utils'
+import { importVideoFile, transcodeOriginalVideofile, optimizeVideofile } from '../../video-transcoding'
 
 export type VideoFilePayload = {
   videoUUID: string
@@ -25,14 +26,14 @@ async function processVideoFileImport (job: Bull.Job) {
   const payload = job.data as VideoFileImportPayload
   logger.info('Processing video file import in job %d.', job.id)
 
-  const video = await VideoModel.loadByUUIDAndPopulateAccountAndServerAndTags(payload.videoUUID)
+  const video = await VideoModel.loadAndPopulateAccountAndServerAndTags(payload.videoUUID)
   // No video, maybe deleted?
   if (!video) {
-    logger.info('Do not process job %d, video does not exist.', job.id, { videoUUID: video.uuid })
+    logger.info('Do not process job %d, video does not exist.', job.id)
     return undefined
   }
 
-  await video.importVideoFile(payload.filePath)
+  await importVideoFile(video, payload.filePath)
 
   await onVideoFileTranscoderOrImportSuccess(video)
   return video
@@ -42,20 +43,20 @@ async function processVideoFile (job: Bull.Job) {
   const payload = job.data as VideoFilePayload
   logger.info('Processing video file in job %d.', job.id)
 
-  const video = await VideoModel.loadByUUIDAndPopulateAccountAndServerAndTags(payload.videoUUID)
+  const video = await VideoModel.loadAndPopulateAccountAndServerAndTags(payload.videoUUID)
   // No video, maybe deleted?
   if (!video) {
-    logger.info('Do not process job %d, video does not exist.', job.id, { videoUUID: video.uuid })
+    logger.info('Do not process job %d, video does not exist.', job.id)
     return undefined
   }
 
   // Transcoding in other resolution
   if (payload.resolution) {
-    await video.transcodeOriginalVideofile(payload.resolution, payload.isPortraitMode)
+    await transcodeOriginalVideofile(video, payload.resolution, payload.isPortraitMode || false)
 
     await retryTransactionWrapper(onVideoFileTranscoderOrImportSuccess, video)
   } else {
-    await video.optimizeOriginalVideofile()
+    await optimizeVideofile(video)
 
     await retryTransactionWrapper(onVideoFileOptimizerSuccess, video, payload.isNewVideo)
   }
@@ -68,7 +69,7 @@ async function onVideoFileTranscoderOrImportSuccess (video: VideoModel) {
 
   return sequelizeTypescript.transaction(async t => {
     // Maybe the video changed in database, refresh it
-    let videoDatabase = await VideoModel.loadByUUIDAndPopulateAccountAndServerAndTags(video.uuid, t)
+    let videoDatabase = await VideoModel.loadAndPopulateAccountAndServerAndTags(video.uuid, t)
     // Video does not exist anymore
     if (!videoDatabase) return undefined
 
@@ -98,7 +99,7 @@ async function onVideoFileOptimizerSuccess (video: VideoModel, isNewVideo: boole
 
   return sequelizeTypescript.transaction(async t => {
     // Maybe the video changed in database, refresh it
-    const videoDatabase = await VideoModel.loadByUUIDAndPopulateAccountAndServerAndTags(video.uuid, t)
+    const videoDatabase = await VideoModel.loadAndPopulateAccountAndServerAndTags(video.uuid, t)
     // Video does not exist anymore
     if (!videoDatabase) return undefined
 

@@ -1,13 +1,21 @@
 import * as express from 'express'
 import { CONFIG, FEEDS, ROUTE_CACHE_LIFETIME } from '../initializers/constants'
 import { THUMBNAILS_SIZE } from '../initializers'
-import { asyncMiddleware, setDefaultSort, videoCommentsFeedsValidator, videoFeedsValidator, videosSortValidator } from '../middlewares'
+import {
+  asyncMiddleware,
+  commonVideosFiltersValidator,
+  setDefaultSort,
+  videoCommentsFeedsValidator,
+  videoFeedsValidator,
+  videosSortValidator
+} from '../middlewares'
 import { VideoModel } from '../models/video/video'
 import * as Feed from 'pfeed'
 import { AccountModel } from '../models/account/account'
 import { cacheRoute } from '../middlewares/cache'
 import { VideoChannelModel } from '../models/video/video-channel'
 import { VideoCommentModel } from '../models/video/video-comment'
+import { buildNSFWFilter } from '../helpers/express-utils'
 
 const feedsRouter = express.Router()
 
@@ -21,6 +29,7 @@ feedsRouter.get('/feeds/videos.:format',
   videosSortValidator,
   setDefaultSort,
   asyncMiddleware(cacheRoute(ROUTE_CACHE_LIFETIME.FEEDS)),
+  commonVideosFiltersValidator,
   asyncMiddleware(videoFeedsValidator),
   asyncMiddleware(generateVideoFeed)
 )
@@ -73,7 +82,7 @@ async function generateVideoFeed (req: express.Request, res: express.Response, n
 
   const account: AccountModel = res.locals.account
   const videoChannel: VideoChannelModel = res.locals.videoChannel
-  const hideNSFW = CONFIG.INSTANCE.DEFAULT_NSFW_POLICY === 'do_not_list'
+  const nsfw = buildNSFWFilter(res, req.query.nsfw)
 
   let name: string
   let description: string
@@ -95,7 +104,8 @@ async function generateVideoFeed (req: express.Request, res: express.Response, n
     start,
     count: FEEDS.COUNT,
     sort: req.query.sort,
-    hideNSFW,
+    includeLocalVideos: true,
+    nsfw,
     filter: req.query.filter,
     withFiles: true,
     accountId: account ? account.id : null,
@@ -129,7 +139,7 @@ async function generateVideoFeed (req: express.Request, res: express.Response, n
       torrent: torrents,
       thumbnail: [
         {
-          url: CONFIG.WEBSERVER.URL + video.getThumbnailPath(),
+          url: CONFIG.WEBSERVER.URL + video.getThumbnailStaticPath(),
           height: THUMBNAILS_SIZE.height,
           width: THUMBNAILS_SIZE.width
         }

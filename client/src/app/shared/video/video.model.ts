@@ -1,17 +1,19 @@
 import { User } from '../'
 import { Video as VideoServerModel, VideoPrivacy, VideoState } from '../../../../../shared'
 import { Avatar } from '../../../../../shared/models/avatars/avatar.model'
-import { VideoConstant } from '../../../../../shared/models/videos/video.model'
-import { getAbsoluteAPIUrl } from '../misc/utils'
-import { ServerConfig } from '../../../../../shared/models'
+import { VideoConstant } from '../../../../../shared/models/videos/video-constant.model'
+import { durationToString, getAbsoluteAPIUrl } from '../misc/utils'
+import { peertubeTranslate, ServerConfig } from '../../../../../shared/models'
 import { Actor } from '@app/shared/actor/actor.model'
-import { peertubeTranslate } from '@app/shared/i18n/i18n-utils'
 import { VideoScheduleUpdate } from '../../../../../shared/models/videos/video-schedule-update.model'
 
 export class Video implements VideoServerModel {
-  by: string
+  byVideoChannel: string
+  byAccount: string
+
   accountAvatarUrl: string
   videoChannelAvatarUrl: string
+
   createdAt: Date
   updatedAt: Date
   publishedAt: Date
@@ -41,6 +43,8 @@ export class Video implements VideoServerModel {
   waitTranscoding?: boolean
   state?: VideoConstant<VideoState>
   scheduledUpdate?: VideoScheduleUpdate
+  blacklisted?: boolean
+  blacklistedReason?: string
 
   account: {
     id: number
@@ -62,16 +66,12 @@ export class Video implements VideoServerModel {
     avatar: Avatar
   }
 
-  private static createDurationString (duration: number) {
-    const hours = Math.floor(duration / 3600)
-    const minutes = Math.floor((duration % 3600) / 60)
-    const seconds = duration % 60
+  userHistory?: {
+    currentTime: number
+  }
 
-    const minutesPadding = minutes >= 10 ? '' : '0'
-    const secondsPadding = seconds >= 10 ? '' : '0'
-    const displayedHours = hours > 0 ? hours.toString() + ':' : ''
-
-    return displayedHours + minutesPadding + minutes.toString() + ':' + secondsPadding + seconds.toString()
+  static buildClientUrl (videoUUID: string) {
+    return '/videos/watch/' + videoUUID
   }
 
   constructor (hash: VideoServerModel, translations = {}) {
@@ -87,7 +87,7 @@ export class Video implements VideoServerModel {
     this.state = hash.state
     this.description = hash.description
     this.duration = hash.duration
-    this.durationLabel = Video.createDurationString(hash.duration)
+    this.durationLabel = durationToString(hash.duration)
     this.id = hash.id
     this.uuid = hash.uuid
     this.isLocal = hash.isLocal
@@ -105,7 +105,8 @@ export class Video implements VideoServerModel {
     this.account = hash.account
     this.channel = hash.channel
 
-    this.by = Actor.CREATE_BY_STRING(hash.account.name, hash.account.host)
+    this.byAccount = Actor.CREATE_BY_STRING(hash.account.name, hash.account.host)
+    this.byVideoChannel = Actor.CREATE_BY_STRING(hash.channel.name, hash.channel.host)
     this.accountAvatarUrl = Actor.GET_ACTOR_AVATAR_URL(this.account)
     this.videoChannelAvatarUrl = Actor.GET_ACTOR_AVATAR_URL(this.channel)
 
@@ -116,6 +117,11 @@ export class Video implements VideoServerModel {
 
     this.scheduledUpdate = hash.scheduledUpdate
     if (this.state) this.state.label = peertubeTranslate(this.state.label, translations)
+
+    this.blacklisted = hash.blacklisted
+    this.blacklistedReason = hash.blacklistedReason
+
+    this.userHistory = hash.userHistory
   }
 
   isVideoNSFWForUser (user: User, serverConfig: ServerConfig) {

@@ -13,6 +13,9 @@ import * as express from 'express'
 import * as morgan from 'morgan'
 import * as cors from 'cors'
 import * as cookieParser from 'cookie-parser'
+import * as helmet from 'helmet'
+import * as useragent from 'useragent'
+import * as anonymize from 'ip-anonymize'
 
 process.title = 'peertube'
 
@@ -20,11 +23,11 @@ process.title = 'peertube'
 const app = express()
 
 // ----------- Core checker -----------
-import { checkMissedConfig, checkFFmpeg, checkConfig, checkActivityPubUrls } from './server/initializers/checker'
+import { checkMissedConfig, checkFFmpeg } from './server/initializers/checker-before-init'
 
 // Do not use barrels because we don't want to load all modules here (we need to initialize database first)
 import { logger } from './server/helpers/logger'
-import { API_VERSION, CONFIG, STATIC_PATHS } from './server/initializers/constants'
+import { API_VERSION, CONFIG, CACHE } from './server/initializers/constants'
 
 const missed = checkMissedConfig()
 if (missed.length !== 0) {
@@ -38,6 +41,8 @@ checkFFmpeg(CONFIG)
     process.exit(-1)
   })
 
+import { checkConfig, checkActivityPubUrls } from './server/initializers/checker-after-init'
+
 const errorMessage = checkConfig()
 if (errorMessage !== null) {
   throw new Error(errorMessage)
@@ -45,6 +50,14 @@ if (errorMessage !== null) {
 
 // Trust our proxy (IP forwarding...)
 app.set('trust proxy', CONFIG.TRUST_PROXY)
+
+// Security middleware
+app.use(helmet({
+  frameguard: {
+    action: 'deny' // we only allow it for /videos/embed, see server/controllers/client.ts
+  },
+  hsts: false
+}))
 
 // ----------- Database -----------
 
@@ -63,7 +76,7 @@ migrate()
 import { installApplication } from './server/initializers'
 import { Emailer } from './server/lib/emailer'
 import { JobQueue } from './server/lib/job-queue'
-import { VideosPreviewCache } from './server/lib/cache'
+import { VideosPreviewCache, VideosCaptionCache } from './server/lib/cache'
 import {
   activityPubRouter,
   apiRouter,
@@ -75,10 +88,13 @@ import {
   trackerRouter,
   createWebsocketServer
 } from './server/controllers'
+import { advertiseDoNotTrack } from './server/middlewares/dnt'
 import { Redis } from './server/lib/redis'
 import { BadActorFollowScheduler } from './server/lib/schedulers/bad-actor-follow-scheduler'
 import { RemoveOldJobsScheduler } from './server/lib/schedulers/remove-old-jobs-scheduler'
 import { UpdateVideosScheduler } from './server/lib/schedulers/update-videos-scheduler'
+import { YoutubeDlUpdateScheduler } from './server/lib/schedulers/youtube-dl-update-scheduler'
+import { VideosRedundancyScheduler } from './server/lib/schedulers/videos-redundancy-scheduler'
 
 // ----------- Command line -----------
 
@@ -86,25 +102,23 @@ import { UpdateVideosScheduler } from './server/lib/schedulers/update-videos-sch
 
 // Enable CORS for develop
 if (isTestInstance()) {
-  app.use((req, res, next) => {
-    // These routes have already cors
-    if (
-      req.path.indexOf(STATIC_PATHS.TORRENTS) === -1 &&
-      req.path.indexOf(STATIC_PATHS.WEBSEED) === -1 &&
-      req.path.startsWith('/api/') === false
-    ) {
-      return (cors({
-        origin: '*',
-        exposedHeaders: 'Retry-After',
-        credentials: true
-      }))(req, res, next)
-    }
-
-    return next()
-  })
+  app.use(cors({
+    origin: '*',
+    exposedHeaders: 'Retry-After',
+    credentials: true
+  }))
 }
-
 // For the logger
+morgan.token('remote-addr', req => {
+  return (req.get('DNT') === '1') ?
+    anonymize(req.ip || (req.connection && req.connection.remoteAddress) || undefined,
+    16, // bitmask for IPv4
+    16  // bitmask for IPv6
+    ) :
+    req.ip
+})
+morgan.token('user-agent', req => (req.get('DNT') === '1') ?
+  useragent.parse(req.get('user-agent')).family : req.get('user-agent'))
 app.use(morgan('combined', {
   stream: { write: logger.info.bind(logger) }
 }))
@@ -116,6 +130,8 @@ app.use(bodyParser.json({
 }))
 // Cookies
 app.use(cookieParser())
+// W3C DNT Tracking Status
+app.use(advertiseDoNotTrack)
 
 // ----------- Views, routes and static files -----------
 
@@ -152,7 +168,10 @@ app.use(function (err, req, res, next) {
     error = err.stack || err.message || err
   }
 
-  logger.error('Error in controller.', { error })
+  // Sequelize error
+  const sql = err.parent ? err.parent.sql : undefined
+
+  logger.error('Error in controller.', { err: error, sql })
   return res.status(err.status || 500).end()
 })
 
@@ -180,12 +199,15 @@ async function startApplication () {
   await JobQueue.Instance.init()
 
   // Caches initializations
-  VideosPreviewCache.Instance.init(CONFIG.CACHE.PREVIEWS.SIZE)
+  VideosPreviewCache.Instance.init(CONFIG.CACHE.PREVIEWS.SIZE, CACHE.PREVIEWS.MAX_AGE)
+  VideosCaptionCache.Instance.init(CONFIG.CACHE.VIDEO_CAPTIONS.SIZE, CACHE.VIDEO_CAPTIONS.MAX_AGE)
 
   // Enable Schedulers
   BadActorFollowScheduler.Instance.enable()
   RemoveOldJobsScheduler.Instance.enable()
   UpdateVideosScheduler.Instance.enable()
+  YoutubeDlUpdateScheduler.Instance.enable()
+  VideosRedundancyScheduler.Instance.enable()
 
   // Redis initialization
   Redis.Instance.init()
@@ -195,4 +217,10 @@ async function startApplication () {
     logger.info('Server listening on %s:%d', hostname, port)
     logger.info('Web server: %s', CONFIG.WEBSERVER.URL)
   })
+
+  process.on('exit', () => {
+    JobQueue.Instance.terminate()
+  })
+
+  process.on('SIGINT', () => process.exit(0))
 }

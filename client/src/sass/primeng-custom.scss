@@ -7,30 +7,47 @@
 @mixin glyphicon-light {
   font-family: 'Glyphicons Halflings';
   text-decoration: none !important;
-  color: #000 !important;
+  color: var(--mainForegroundColor) !important;
 }
 
 // data table customizations
 p-table {
   font-size: 15px !important;
 
+  .ui-table-caption {
+    border: none;
+
+    .caption {
+      height: 40px;
+      display: flex;
+      align-items: center;
+    }
+  }
+
   td {
-    border: 1px solid #E5E5E5 !important;
     padding-left: 15px !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
+
+    &:not(.action-cell) {
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+    }
   }
 
   tr {
-    background-color: #fff !important;
+    background-color: var(--mainBackgroundColor) !important;
     height: 46px;
+
+    &.ui-state-highlight {
+      background-color:var(--submenuColor) !important;
+      color:var(--mainForegroundColor) !important;
+    }
   }
 
   .ui-table-tbody {
     tr {
       &:hover {
-        background-color: #f0f0f0 !important;
+        background-color: var(--submenuColor) !important;
       }
 
       &:not(:hover) {
@@ -57,15 +74,17 @@ p-table {
 
   th {
     border: none !important;
-    border-bottom: 1px solid #f0f0f0 !important;
+    border-bottom: 1px solid !important;
+    border-color: var(--submenuColor) !important;
     text-align: left !important;
     padding: 5px 0 5px 15px !important;
     font-weight: $font-semibold !important;
-    color: #000 !important;
+    color: var(--mainForegroundColor) !important;
 
     &.ui-sortable-column:hover {
-      background-color: #f0f0f0 !important;
-      border: 1px solid #f0f0f0 !important;
+      background-color: var(--submenuColor) !important;
+      border: 1px solid !important;
+      border-color: var(--submenuColor) !important;
       border-width: 0 1px !important;
 
       &:first-child {
@@ -74,13 +93,14 @@ p-table {
     }
 
     &.ui-state-highlight {
-      background-color: #fff !important;
+      background-color:var(--submenuColor) !important;
 
       .pi {
         @extend .glyphicon;
 
         color: #000;
         font-size: 11px;
+        top: 0;
 
         &.pi-sort-up {
           @extend .glyphicon-triangle-top;
@@ -105,12 +125,51 @@ p-table {
 
   p-paginator {
     .ui-paginator-bottom {
+      background-color: var(--mainBackgroundColor) !important;
       position: relative;
-      border: 1px solid #f0f0f0 !important;
+      border: none;
+      border-top: 1px solid !important;
+      border-color: var(--submenuColor) !important;
       height: 40px;
       display: flex;
       justify-content: center;
       align-items: center;
+
+      .ui-paginator-first,
+      .ui-paginator-prev,
+      .ui-paginator-next,
+      .ui-paginator-last {
+        @include glyphicon-light;
+        padding: 5px 2px;
+        height: auto;
+        outline: none;
+        font-size: 13px;
+        top: -1px;
+
+        &.ui-state-disabled:hover {
+          background-color: #fff !important;
+        }
+
+        &.ui-paginator-first {
+          @extend .glyphicon-step-backward;
+        }
+
+        &.ui-paginator-prev {
+          @extend .glyphicon-chevron-left;
+
+          margin-right: 10px;
+        }
+
+        &.ui-paginator-next {
+          @extend .glyphicon-chevron-right;
+
+          margin-left: 10px;
+        }
+
+        &.ui-paginator-last {
+          @extend .glyphicon-step-forward;
+        }
+      }
 
       .ui-paginator-pages {
         height: auto !important;
@@ -118,7 +177,7 @@ p-table {
         a {
           color: #000 !important;
           font-weight: $font-semibold !important;
-          margin-right: 20px !important;
+          margin: 0 10px !important;
           outline: 0 !important;
           border-radius: 3px !important;
           padding: 5px 2px !important;
@@ -127,7 +186,7 @@ p-table {
           &.ui-state-active {
             &, &:hover, &:active, &:focus {
               color: #fff !important;
-              background-color: $orange-color !important;
+              background-color: var(--mainColor) !important;
             }
           }
         }
@@ -169,6 +228,34 @@ p-calendar .ui-datepicker {
     .pi.pi-chevron-down {
       @extend .glyphicon-chevron-down;
       @include glyphicon-light;
+    }
+  }
+}
+
+.ui-chkbox-box {
+  &.ui-state-active {
+    border-color: var(--mainColor) !important;
+    background-color: var(--mainColor) !important;
+  }
+
+  .ui-chkbox-icon {
+    position: relative;
+
+    &:after {
+      content: '';
+      position: absolute;
+      left: 5px;
+      width: 5px;
+      height: 12px;
+      opacity: 0;
+      transform: rotate(45deg) scale(0);
+      border-right: 2px solid var(--mainBackgroundColor);
+      border-bottom: 2px solid var(--mainBackgroundColor);
+    }
+
+    &.pi-check:after {
+      opacity: 1;
+      transform: rotate(45deg) scale(1);
     }
   }
 }

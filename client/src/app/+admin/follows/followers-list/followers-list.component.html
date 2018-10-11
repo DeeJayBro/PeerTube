@@ -2,6 +2,15 @@
   [value]="followers" [lazy]="true" [paginator]="true" [totalRecords]="totalRecords" [rows]="rowsPerPage"
   [sortField]="sort.field" [sortOrder]="sort.order" (onLazyLoad)="loadLazy($event)"
 >
+  <ng-template pTemplate="caption">
+    <div class="caption">
+      <input
+        type="text" name="table-filter" id="table-filter" i18n-placeholder placeholder="Filter..."
+        (keyup)="onSearch($event.target.value)"
+      >
+    </div>
+  </ng-template>
+
   <ng-template pTemplate="header">
     <tr>
       <th i18n style="width: 60px">ID</th>
@@ -19,7 +28,10 @@
       <td>{{ follow.score }}</td>
       <td>{{ follow.follower.name }}</td>
       <td>{{ follow.follower.host }}</td>
-      <td>{{ follow.state }}</td>
+
+      <td *ngIf="follow.state === 'accepted'" i18n>Accepted</td>
+      <td *ngIf="follow.state === 'pending'" i18n>Pending</td>
+
       <td>{{ follow.createdAt }}</td>
     </tr>
   </ng-template>

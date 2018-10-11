@@ -3,14 +3,19 @@ import { omit } from 'lodash'
 import { ServerConfig, UserRight } from '../../../shared'
 import { About } from '../../../shared/models/server/about.model'
 import { CustomConfig } from '../../../shared/models/server/custom-config.model'
-import { unlinkPromise, writeFilePromise } from '../../helpers/core-utils'
-import { isSignupAllowed, isSignupAllowedForCurrentIP } from '../../helpers/utils'
+import { isSignupAllowed, isSignupAllowedForCurrentIP } from '../../helpers/signup'
 import { CONFIG, CONSTRAINTS_FIELDS, reloadConfig } from '../../initializers'
 import { asyncMiddleware, authenticate, ensureUserHasRight } from '../../middlewares'
 import { customConfigUpdateValidator } from '../../middlewares/validators/config'
+import { ClientHtml } from '../../lib/client-html'
+import { auditLoggerFactory, CustomConfigAuditView, getAuditIdFromRes } from '../../helpers/audit-logger'
+import { remove, writeJSON } from 'fs-extra'
+import { getVersion } from '../../helpers/utils'
 
 const packageJSON = require('../../../../package.json')
 const configRouter = express.Router()
+
+const auditLogger = auditLoggerFactory('config')
 
 configRouter.get('/about', getAbout)
 configRouter.get('/',
@@ -34,12 +39,15 @@ configRouter.delete('/custom',
   asyncMiddleware(deleteCustomConfig)
 )
 
+let serverCommit: string
 async function getConfig (req: express.Request, res: express.Response, next: express.NextFunction) {
   const allowed = await isSignupAllowed()
   const allowedForCurrentIP = isSignupAllowedForCurrentIP(req.ip)
+  serverCommit = (serverCommit) ? serverCommit : await getVersion()
+  if (serverCommit === packageJSON.version) serverCommit = ''
 
   const enabledResolutions = Object.keys(CONFIG.TRANSCODING.RESOLUTIONS)
-   .filter(key => CONFIG.TRANSCODING.RESOLUTIONS[key] === true)
+   .filter(key => CONFIG.TRANSCODING.ENABLED === CONFIG.TRANSCODING.RESOLUTIONS[key] === true)
    .map(r => parseInt(r, 10))
 
   const json: ServerConfig = {
@@ -54,12 +62,24 @@ async function getConfig (req: express.Request, res: express.Response, next: exp
       }
     },
     serverVersion: packageJSON.version,
+    serverCommit,
     signup: {
       allowed,
-      allowedForCurrentIP
+      allowedForCurrentIP,
+      requiresEmailVerification: CONFIG.SIGNUP.REQUIRES_EMAIL_VERIFICATION
     },
     transcoding: {
       enabledResolutions
+    },
+    import: {
+      videos: {
+        http: {
+          enabled: CONFIG.IMPORT.VIDEOS.HTTP.ENABLED
+        },
+        torrent: {
+          enabled: CONFIG.IMPORT.VIDEOS.TORRENT.ENABLED
+        }
+      }
     },
     avatar: {
       file: {
@@ -80,8 +100,17 @@ async function getConfig (req: express.Request, res: express.Response, next: exp
         extensions: CONSTRAINTS_FIELDS.VIDEOS.EXTNAME
       }
     },
+    videoCaption: {
+      file: {
+        size: {
+          max: CONSTRAINTS_FIELDS.VIDEO_CAPTIONS.CAPTION_FILE.FILE_SIZE.max
+        },
+        extensions: CONSTRAINTS_FIELDS.VIDEO_CAPTIONS.CAPTION_FILE.EXTNAME
+      }
+    },
     user: {
-      videoQuota: CONFIG.USER.VIDEO_QUOTA
+      videoQuota: CONFIG.USER.VIDEO_QUOTA,
+      videoQuotaDaily: CONFIG.USER.VIDEO_QUOTA_DAILY
     }
   }
 
@@ -108,9 +137,12 @@ async function getCustomConfig (req: express.Request, res: express.Response, nex
 }
 
 async function deleteCustomConfig (req: express.Request, res: express.Response, next: express.NextFunction) {
-  await unlinkPromise(CONFIG.CUSTOM_FILE)
+  await remove(CONFIG.CUSTOM_FILE)
+
+  auditLogger.delete(getAuditIdFromRes(res), new CustomConfigAuditView(customConfig()))
 
   reloadConfig()
+  ClientHtml.invalidCache()
 
   const data = customConfig()
 
@@ -119,25 +151,45 @@ async function deleteCustomConfig (req: express.Request, res: express.Response, 
 
 async function updateCustomConfig (req: express.Request, res: express.Response, next: express.NextFunction) {
   const toUpdate: CustomConfig = req.body
+  const oldCustomConfigAuditKeys = new CustomConfigAuditView(customConfig())
 
   // Force number conversion
   toUpdate.cache.previews.size = parseInt('' + toUpdate.cache.previews.size, 10)
+  toUpdate.cache.captions.size = parseInt('' + toUpdate.cache.captions.size, 10)
   toUpdate.signup.limit = parseInt('' + toUpdate.signup.limit, 10)
   toUpdate.user.videoQuota = parseInt('' + toUpdate.user.videoQuota, 10)
+  toUpdate.user.videoQuotaDaily = parseInt('' + toUpdate.user.videoQuotaDaily, 10)
   toUpdate.transcoding.threads = parseInt('' + toUpdate.transcoding.threads, 10)
 
   // camelCase to snake_case key
-  const toUpdateJSON = omit(toUpdate, 'user.videoQuota', 'instance.defaultClientRoute', 'instance.shortDescription')
+  const toUpdateJSON = omit(
+    toUpdate,
+    'user.videoQuota',
+    'instance.defaultClientRoute',
+    'instance.shortDescription',
+    'cache.videoCaptions',
+    'signup.requiresEmailVerification'
+  )
   toUpdateJSON.user['video_quota'] = toUpdate.user.videoQuota
+  toUpdateJSON.user['video_quota_daily'] = toUpdate.user.videoQuotaDaily
   toUpdateJSON.instance['default_client_route'] = toUpdate.instance.defaultClientRoute
   toUpdateJSON.instance['short_description'] = toUpdate.instance.shortDescription
   toUpdateJSON.instance['default_nsfw_policy'] = toUpdate.instance.defaultNSFWPolicy
+  toUpdateJSON.signup['requires_email_verification'] = toUpdate.signup.requiresEmailVerification
 
-  await writeFilePromise(CONFIG.CUSTOM_FILE, JSON.stringify(toUpdateJSON, undefined, 2))
+  await writeJSON(CONFIG.CUSTOM_FILE, toUpdateJSON, { spaces: 2 })
 
   reloadConfig()
+  ClientHtml.invalidCache()
 
   const data = customConfig()
+
+  auditLogger.update(
+    getAuditIdFromRes(res),
+    new CustomConfigAuditView(data),
+    oldCustomConfigAuditKeys
+  )
+
   return res.json(data).end()
 }
 
@@ -172,17 +224,22 @@ function customConfig (): CustomConfig {
     cache: {
       previews: {
         size: CONFIG.CACHE.PREVIEWS.SIZE
+      },
+      captions: {
+        size: CONFIG.CACHE.VIDEO_CAPTIONS.SIZE
       }
     },
     signup: {
       enabled: CONFIG.SIGNUP.ENABLED,
-      limit: CONFIG.SIGNUP.LIMIT
+      limit: CONFIG.SIGNUP.LIMIT,
+      requiresEmailVerification: CONFIG.SIGNUP.REQUIRES_EMAIL_VERIFICATION
     },
     admin: {
       email: CONFIG.ADMIN.EMAIL
     },
     user: {
-      videoQuota: CONFIG.USER.VIDEO_QUOTA
+      videoQuota: CONFIG.USER.VIDEO_QUOTA,
+      videoQuotaDaily: CONFIG.USER.VIDEO_QUOTA_DAILY
     },
     transcoding: {
       enabled: CONFIG.TRANSCODING.ENABLED,
@@ -193,6 +250,16 @@ function customConfig (): CustomConfig {
         '480p': CONFIG.TRANSCODING.RESOLUTIONS[ '480p' ],
         '720p': CONFIG.TRANSCODING.RESOLUTIONS[ '720p' ],
         '1080p': CONFIG.TRANSCODING.RESOLUTIONS[ '1080p' ]
+      }
+    },
+    import: {
+      videos: {
+        http: {
+          enabled: CONFIG.IMPORT.VIDEOS.HTTP.ENABLED
+        },
+        torrent: {
+          enabled: CONFIG.IMPORT.VIDEOS.TORRENT.ENABLED
+        }
       }
     }
   }

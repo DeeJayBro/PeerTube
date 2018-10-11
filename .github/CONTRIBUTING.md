@@ -44,7 +44,9 @@ before you start working on them :).
 
 ### Prerequisites
 
-First, make sure that you have followed 
+First, you should use a server or PC with at least 4GB of RAM. Less RAM may lead to crashes.
+
+Make sure that you have followed 
 [the steps](/support/doc/dependencies.md) 
 to install the dependencies.
 
@@ -56,6 +58,10 @@ $ cd PeerTube
 $ yarn install --pure-lockfile
 ```
 
+Note that development is done on the `develop` branch. If you want to hack on
+Peertube, you should switch to that branch. Also note that you have to repeat
+the `yarn install --pure-lockfile` command.
+
 Then, create a postgres database and user with the values set in the
 `config/default.yaml` file. For instance, if you do not change the values
 there, the following commands would create a new database called `peertube_dev`
@@ -65,6 +71,13 @@ and a postgres user called `peertube` with password `peertube`:
 # sudo -u postgres createuser -P peertube
 Enter password for new role: peertube
 # sudo -u postgres createdb -O peertube peertube_dev
+```
+
+Then enable extensions PeerTube needs:
+
+```
+$ sudo -u postgres psql -c "CREATE EXTENSION pg_trgm;" peertube_dev
+$ sudo -u postgres psql -c "CREATE EXTENSION unaccent;" peertube_dev
 ```
 
 In dev mode, administrator username is **root** and password is **test**.
@@ -108,6 +121,18 @@ and the web server is automatically restarted.
 ```
 $ npm run dev
 ```
+
+Depending on your OS, you may face the following error :
+```
+$ [nodemon] Internal watch failed: ENOSPC: no space left on device, watch '/PeerTube/dist'
+```
+
+This is due to your system's limit on the number of files you can monitor for live-checking changes. For example, Ubuntu uses inotify and this limit is set to 8192. Then you need to change this limit :
+```
+echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf && sudo sysctl -p
+```
+
+See more information here : https://github.com/guard/listen/wiki/Increasing-the-amount-of-inotify-watchers
 
 ### Federation
 

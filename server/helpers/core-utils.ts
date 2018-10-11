@@ -5,14 +5,41 @@
 
 import * as bcrypt from 'bcrypt'
 import * as createTorrent from 'create-torrent'
-import { pseudoRandomBytes } from 'crypto'
-import { copyFile, readdir, readFile, rename, stat, Stats, unlink, writeFile } from 'fs'
-import * as mkdirp from 'mkdirp'
+import { createHash, HexBase64Latin1Encoding, pseudoRandomBytes } from 'crypto'
 import { isAbsolute, join } from 'path'
 import * as pem from 'pem'
-import * as rimraf from 'rimraf'
 import { URL } from 'url'
 import { truncate } from 'lodash'
+import { exec } from 'child_process'
+
+const timeTable = {
+  ms:           1,
+  second:       1000,
+  minute:       60000,
+  hour:         3600000,
+  day:          3600000 * 24,
+  week:         3600000 * 24 * 7,
+  month:        3600000 * 24 * 30
+}
+export function parseDuration (duration: number | string): number {
+  if (typeof duration === 'number') return duration
+
+  if (typeof duration === 'string') {
+    const split = duration.match(/^([\d\.,]+)\s?(\w+)$/)
+
+    if (split.length === 3) {
+      const len = parseFloat(split[1])
+      let unit = split[2].replace(/s$/i,'').toLowerCase()
+      if (unit === 'm') {
+        unit = 'ms'
+      }
+
+      return (len || 1) * (timeTable[unit] || 0)
+    }
+  }
+
+  throw new Error('Duration could not be properly parsed')
+}
 
 function sanitizeUrl (url: string) {
   const urlObject = new URL(url)
@@ -37,12 +64,16 @@ function isTestInstance () {
   return process.env.NODE_ENV === 'test'
 }
 
+function isProdInstance () {
+  return process.env.NODE_ENV === 'production'
+}
+
 function root () {
   // We are in /helpers/utils.js
   const paths = [ __dirname, '..', '..' ]
 
   // We are under /dist directory
-  if (process.mainModule.filename.endsWith('.ts') === false) {
+  if (process.mainModule && process.mainModule.filename.endsWith('.ts') === false) {
     paths.push('..')
   }
 
@@ -58,7 +89,7 @@ function escapeHTML (stringParam) {
     '<': '&lt;',
     '>': '&gt;',
     '"': '&quot;',
-    "'": '&#39;',
+    '\'': '&#39;',
     '/': '&#x2F;',
     '`': '&#x60;',
     '=': '&#x3D;'
@@ -93,6 +124,10 @@ function peertubeTruncate (str: string, maxLength: number) {
   // We always use the .length so we need to truncate more if needed
   options.length -= truncatedStr.length - maxLength
   return truncate(str, options)
+}
+
+function sha256 (str: string, encoding: HexBase64Latin1Encoding = 'hex') {
+  return createHash('sha256').update(str).digest(encoding)
 }
 
 function promisify0<A> (func: (cb: (err: any, result: A) => void) => void): () => Promise<A> {
@@ -136,13 +171,6 @@ function promisify2WithVoid<T, U> (func: (arg1: T, arg2: U, cb: (err: any) => vo
   }
 }
 
-const copyFilePromise = promisify2WithVoid<string, string>(copyFile)
-const readFileBufferPromise = promisify1<string, Buffer>(readFile)
-const unlinkPromise = promisify1WithVoid<string>(unlink)
-const renamePromise = promisify2WithVoid<string, string>(rename)
-const writeFilePromise = promisify2WithVoid<string, any>(writeFile)
-const readdirPromise = promisify1<string, string[]>(readdir)
-const mkdirpPromise = promisify1<string, string>(mkdirp)
 const pseudoRandomBytesPromise = promisify1<number, Buffer>(pseudoRandomBytes)
 const createPrivateKey = promisify1<number, { key: string }>(pem.createPrivateKey)
 const getPublicKey = promisify1<string, { publicKey: string }>(pem.getPublicKey)
@@ -150,13 +178,15 @@ const bcryptComparePromise = promisify2<any, string, boolean>(bcrypt.compare)
 const bcryptGenSaltPromise = promisify1<number, string>(bcrypt.genSalt)
 const bcryptHashPromise = promisify2<any, string | number, string>(bcrypt.hash)
 const createTorrentPromise = promisify2<string, any, any>(createTorrent)
-const rimrafPromise = promisify1WithVoid<string>(rimraf)
-const statPromise = promisify1<string, Stats>(stat)
+const execPromise2 = promisify2<string, any, string>(exec)
+const execPromise = promisify1<string, string>(exec)
 
 // ---------------------------------------------------------------------------
 
 export {
   isTestInstance,
+  isProdInstance,
+
   root,
   escapeHTML,
   pageToStartAndCount,
@@ -164,17 +194,11 @@ export {
   sanitizeHost,
   buildPath,
   peertubeTruncate,
+  sha256,
 
   promisify0,
   promisify1,
 
-  copyFilePromise,
-  readdirPromise,
-  readFileBufferPromise,
-  unlinkPromise,
-  renamePromise,
-  writeFilePromise,
-  mkdirpPromise,
   pseudoRandomBytesPromise,
   createPrivateKey,
   getPublicKey,
@@ -182,6 +206,6 @@ export {
   bcryptGenSaltPromise,
   bcryptHashPromise,
   createTorrentPromise,
-  rimrafPromise,
-  statPromise
+  execPromise2,
+  execPromise
 }

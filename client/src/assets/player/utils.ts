@@ -23,16 +23,50 @@ function isMobile () {
   return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
 }
 
-function buildVideoLink (time?: number) {
-  let href = window.location.href.replace('/embed/', '/watch/')
+function buildVideoLink (time?: number, url?: string) {
+  if (!url) url = window.location.origin + window.location.pathname.replace('/embed/', '/watch/')
+
   if (time) {
     const timeInt = Math.floor(time)
 
-    if (window.location.search) href += '&start=' + timeInt
-    else href += '?start=' + timeInt
+    const params = new URLSearchParams(window.location.search)
+    params.set('start', secondsToTime(timeInt))
+
+    return url + '?' + params.toString()
   }
 
-  return href
+  return url
+}
+
+function timeToInt (time: number | string) {
+  if (typeof time === 'number') return time
+
+  const reg = /^((\d+)h)?((\d+)m)?((\d+)s?)?$/
+  const matches = time.match(reg)
+
+  if (!matches) return 0
+
+  const hours = parseInt(matches[2] || '0', 10)
+  const minutes = parseInt(matches[4] || '0', 10)
+  const seconds = parseInt(matches[6] || '0', 10)
+
+  return hours * 3600 + minutes * 60 + seconds
+}
+
+function secondsToTime (seconds: number) {
+  let time = ''
+
+  let hours = Math.floor(seconds / 3600)
+  if (hours >= 1) time = hours + 'h'
+
+  seconds %= 3600
+  let minutes = Math.floor(seconds / 60)
+  if (minutes >= 1) time += minutes + 'm'
+
+  seconds %= 60
+  if (seconds >= 1) time += seconds + 's'
+
+  return time
 }
 
 function buildVideoEmbed (embedUrl: string) {
@@ -81,6 +115,7 @@ function videoFileMinByResolution (files: VideoFile[]) {
 
 export {
   toTitleCase,
+  timeToInt,
   buildVideoLink,
   buildVideoEmbed,
   videoFileMaxByResolution,

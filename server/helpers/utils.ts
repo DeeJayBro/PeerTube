@@ -1,15 +1,17 @@
-import { Model } from 'sequelize-typescript'
-import * as ipaddr from 'ipaddr.js'
 import { ResultList } from '../../shared'
-import { VideoResolution } from '../../shared/models/videos'
 import { CONFIG } from '../initializers'
-import { UserModel } from '../models/account/user'
-import { ActorModel } from '../models/activitypub/actor'
 import { ApplicationModel } from '../models/application/application'
-import { pseudoRandomBytesPromise } from './core-utils'
+import { execPromise, execPromise2, pseudoRandomBytesPromise, sha256 } from './core-utils'
 import { logger } from './logger'
+import { join } from 'path'
+import { Instance as ParseTorrent } from 'parse-torrent'
+import { remove } from 'fs-extra'
+import * as memoizee from 'memoizee'
 
-const isCidr = require('is-cidr')
+function deleteFileAsync (path: string) {
+  remove(path)
+    .catch(err => logger.error('Cannot delete the file %s asynchronously.', path, { err }))
+}
 
 async function generateRandomString (size: number) {
   const raw = await pseudoRandomBytesPromise(size)
@@ -34,109 +36,70 @@ function getFormattedObjects<U, T extends FormattableToJSON> (objects: T[], obje
   } as ResultList<U>
 }
 
-async function isSignupAllowed () {
-  if (CONFIG.SIGNUP.ENABLED === false) {
-    return false
-  }
+const getServerActor = memoizee(async function () {
+  const application = await ApplicationModel.load()
+  if (!application) throw Error('Could not load Application from database.')
 
-  // No limit and signup is enabled
-  if (CONFIG.SIGNUP.LIMIT === -1) {
-    return true
-  }
+  return application.Account.Actor
+})
 
-  const totalUsers = await UserModel.countTotal()
+function generateVideoTmpPath (target: string | ParseTorrent) {
+  const id = typeof target === 'string' ? target : target.infoHash
 
-  return totalUsers < CONFIG.SIGNUP.LIMIT
+  const hash = sha256(id)
+  return join(CONFIG.STORAGE.VIDEOS_DIR, hash + '-import.mp4')
 }
 
-function isSignupAllowedForCurrentIP (ip: string) {
-  const addr = ipaddr.parse(ip)
-  let excludeList = [ 'blacklist' ]
-  let matched: string
-
-  // if there is a valid, non-empty whitelist, we exclude all unknown adresses too
-  if (CONFIG.SIGNUP.FILTERS.CIDR.WHITELIST.filter(cidr => isCidr(cidr)).length > 0) {
-    excludeList.push('unknown')
-  }
-
-  if (addr.kind() === 'ipv4') {
-    const addrV4 = ipaddr.IPv4.parse(ip)
-    const rangeList = {
-      whitelist: CONFIG.SIGNUP.FILTERS.CIDR.WHITELIST.filter(cidr => isCidr.v4(cidr))
-                                                .map(cidr => ipaddr.IPv4.parseCIDR(cidr)),
-      blacklist: CONFIG.SIGNUP.FILTERS.CIDR.BLACKLIST.filter(cidr => isCidr.v4(cidr))
-                                                .map(cidr => ipaddr.IPv4.parseCIDR(cidr))
-    }
-    matched = ipaddr.subnetMatch(addrV4, rangeList, 'unknown')
-  } else if (addr.kind() === 'ipv6') {
-    const addrV6 = ipaddr.IPv6.parse(ip)
-    const rangeList = {
-      whitelist: CONFIG.SIGNUP.FILTERS.CIDR.WHITELIST.filter(cidr => isCidr.v6(cidr))
-                                                .map(cidr => ipaddr.IPv6.parseCIDR(cidr)),
-      blacklist: CONFIG.SIGNUP.FILTERS.CIDR.BLACKLIST.filter(cidr => isCidr.v6(cidr))
-                                                .map(cidr => ipaddr.IPv6.parseCIDR(cidr))
-    }
-    matched = ipaddr.subnetMatch(addrV6, rangeList, 'unknown')
-  }
-
-  return !excludeList.includes(matched)
+function getSecureTorrentName (originalName: string) {
+  return sha256(originalName) + '.torrent'
 }
 
-function computeResolutionsToTranscode (videoFileHeight: number) {
-  const resolutionsEnabled: number[] = []
-  const configResolutions = CONFIG.TRANSCODING.RESOLUTIONS
+async function getVersion () {
+  try {
+    const tag = await execPromise2(
+      '[ ! -d .git ] || git name-rev --name-only --tags --no-undefined HEAD 2>/dev/null || true',
+      { stdio: [ 0, 1, 2 ] }
+    )
 
-  // Put in the order we want to proceed jobs
-  const resolutions = [
-    VideoResolution.H_480P,
-    VideoResolution.H_360P,
-    VideoResolution.H_720P,
-    VideoResolution.H_240P,
-    VideoResolution.H_1080P
-  ]
-
-  for (const resolution of resolutions) {
-    if (configResolutions[ resolution + 'p' ] === true && videoFileHeight > resolution) {
-      resolutionsEnabled.push(resolution)
-    }
+    if (tag) return tag.replace(/^v/, '')
+  } catch (err) {
+    logger.debug('Cannot get version from git tags.', { err })
   }
 
-  return resolutionsEnabled
-}
+  try {
+    const version = await execPromise('[ ! -d .git ] || git rev-parse --short HEAD')
 
-function resetSequelizeInstance (instance: Model<any>, savedFields: object) {
-  Object.keys(savedFields).forEach(key => {
-    const value = savedFields[key]
-    instance.set(key, value)
-  })
-}
-
-let serverActor: ActorModel
-async function getServerActor () {
-  if (serverActor === undefined) {
-    const application = await ApplicationModel.load()
-    serverActor = application.Account.Actor
+    if (version) return version.toString().trim()
+  } catch (err) {
+    logger.debug('Cannot get version from git HEAD.', { err })
   }
 
-  if (!serverActor) {
-    logger.error('Cannot load server actor.')
-    process.exit(0)
-  }
-
-  return Promise.resolve(serverActor)
+  return require('../../../package.json').version
 }
 
-type SortType = { sortModel: any, sortValue: string }
+/**
+ * From a filename like "ede4cba5-742b-46fa-a388-9a6eb3a3aeb3.mp4", returns
+ * only the "ede4cba5-742b-46fa-a388-9a6eb3a3aeb3" part. If the filename does
+ * not contain a UUID, returns null.
+ */
+function getUUIDFromFilename (filename: string) {
+  const regex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/
+  const result = filename.match(regex)
+
+  if (!result || Array.isArray(result) === false) return null
+
+  return result[0]
+}
 
 // ---------------------------------------------------------------------------
 
 export {
+  deleteFileAsync,
   generateRandomString,
   getFormattedObjects,
-  isSignupAllowed,
-  isSignupAllowedForCurrentIP,
-  computeResolutionsToTranscode,
-  resetSequelizeInstance,
+  getSecureTorrentName,
   getServerActor,
-  SortType
+  getVersion,
+  generateVideoTmpPath,
+  getUUIDFromFilename
 }
