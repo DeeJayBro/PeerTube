@@ -23,10 +23,10 @@ export class SubscribeButtonComponent implements OnInit {
   constructor (
     private authService: AuthService,
     private router: Router,
-    private notificationsService: NotificationsService,
-    private userSubscriptionService: UserSubscriptionService,
-    private i18n: I18n,
-    private videoService: VideoService
+    protected notificationsService: NotificationsService,
+    protected userSubscriptionService: UserSubscriptionService,
+    protected i18n: I18n,
+    protected videoService: VideoService
   ) { }
 
   get uri () {

@@ -5,6 +5,10 @@
   @include sub-menu-with-actor;
 }
 
+.actor, .actor-info {
+  width: 100%;
+}
+
 my-user-moderation-dropdown,
 .badge {
   margin-left: 10px;

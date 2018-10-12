@@ -53,7 +53,8 @@ import { PeertubeCheckboxComponent } from '@app/shared/forms/peertube-checkbox.c
 import { VideoImportService } from '@app/shared/video-import/video-import.service'
 import { ActionDropdownComponent } from '@app/shared/buttons/action-dropdown.component'
 import { NgbDropdownModule, NgbModalModule, NgbPopoverModule, NgbTabsetModule, NgbTooltipModule } from '@ng-bootstrap/ng-bootstrap'
-import { SubscribeButtonComponent, RemoteSubscribeComponent, UserSubscriptionService } from '@app/shared/user-subscription'
+import { UserSubscribeButtonComponent, SubscribeButtonComponent,
+RemoteSubscribeComponent, UserSubscriptionService } from '@app/shared/user-subscription'
 import { InstanceFeaturesTableComponent } from '@app/shared/instance/instance-features-table.component'
 import { OverviewService } from '@app/shared/overview'
 import { UserBanModalComponent } from '@app/shared/moderation'
@@ -95,6 +96,7 @@ import { UserModerationDropdownComponent } from '@app/shared/moderation/user-mod
     ReactiveFileComponent,
     PeertubeCheckboxComponent,
     SubscribeButtonComponent,
+    UserSubscribeButtonComponent,
     RemoteSubscribeComponent,
     InstanceFeaturesTableComponent,
     UserBanModalComponent,
@@ -132,6 +134,7 @@ import { UserModerationDropdownComponent } from '@app/shared/moderation/user-mod
     ReactiveFileComponent,
     PeertubeCheckboxComponent,
     SubscribeButtonComponent,
+    UserSubscribeButtonComponent,
     RemoteSubscribeComponent,
     InstanceFeaturesTableComponent,
     UserBanModalComponent,
